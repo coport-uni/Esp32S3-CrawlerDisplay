@@ -52,7 +52,7 @@ static lv_obj_t *make_value_label(lv_obj_t *parent, const char *initial)
 {
     lv_obj_t *lbl = lv_label_create(parent);
     lv_label_set_text(lbl, initial);
-    lv_obj_set_style_text_color(lbl, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
     return lbl;
 }
 
