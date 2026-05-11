@@ -1,6 +1,0 @@
-"-specs=C:/Users/USER_55_DeepLearning/Desktop/workspace/container/Espress_dev/build/bootloader/specs/picolibc.specs"
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
--fno-rtti

@@ -1,0 +1,5 @@
+# ESP-IDF build output
+build/
+
+# External tools / binaries kept in workspace
+*.exe

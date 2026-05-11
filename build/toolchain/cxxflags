@@ -1,7 +1,0 @@
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
--mdisable-hardware-atomics
-"-specs=C:/Users/USER_55_DeepLearning/Desktop/workspace/container/Espress_dev/build/specs/picolibc.specs"
--fno-rtti
