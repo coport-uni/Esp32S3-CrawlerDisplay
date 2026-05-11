@@ -19,5 +19,8 @@ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_LV_MEM_CUSTOM=y
 CONFIG_LV_MEMCPY_MEMSET_STD=y
 
+# LVGL 내장 sprintf에서 %f 지원. 없으면 lv_label_set_text_fmt("%f", x)가 'f' literal로 출력됨.
+CONFIG_LV_USE_FLOAT=y
+
 # USB-Serial JTAG 콘솔
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

@@ -171,7 +171,7 @@ Debug, exploratory, and throwaway scratch files go in `claude_test/`, **not** mi
 **Mandatory** workflow for every task, regardless of size:
 
 1. **Validate the command** before doing anything else (see "Command Input Validation" below).
-2. **Write or append to `ToDo.md`** at the workspace root in this format:
+2. **Write or append to `ToDo.md`** at the project repo root (`Espress_dev/ToDo.md`, alongside this `CLAUDE.md`) in this format:
    ```markdown
    ## YYYY-MM-DD | Task title
 
@@ -264,7 +264,7 @@ Marking completion (flipping `- [ ]` to `- [x]`, appending output path/commit ha
 
 ## 9. Learned Patterns Reference
 
-When `LearnedPatterns.md` exists at the workspace root, treat it as part of the workflow.
+When `LearnedPatterns.md` exists at the project repo root (`Espress_dev/LearnedPatterns.md`, alongside this `CLAUDE.md`), treat it as part of the workflow.
 
 1. **Before drafting `ToDo.md`**, read the sections of `LearnedPatterns.md` relevant to the new task (filter by component, library, or hardware area).
 2. **Reference applicable patterns** in ToDo entries using `(see LP §X)` where `X` is the section number:
@@ -298,6 +298,6 @@ If `LearnedPatterns.md` does not exist, generate it by analyzing completed (`[x]
 
 ### Constraints
 - **Do not modify `ToDo.md`.** It is append-only; edits happen only in `LearnedPatterns.md`.
-- **Create `LearnedPatterns.md` as a new file** at the workspace root.
+- **Create `LearnedPatterns.md` as a new file** at the project repo root (alongside this `CLAUDE.md`).
 - **Do not invent patterns.** When a ToDo item is ambiguous, place it under §99 rather than guessing.
 - **Write all content in English**, consistent with §2 Language.

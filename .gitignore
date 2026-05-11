@@ -3,3 +3,7 @@ build/
 
 # External tools / binaries kept in workspace
 *.exe
+
+# Local Claude tooling artifacts (hooks/settings stay tracked, scratch files do not)
+.claude/issue-body.md
+.claude/last-build.log
