@@ -124,12 +124,12 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
 - **Fix**: Use the official ESP32-S3-BOX-3-SENSOR extension, or add external ~4.7 kΩ pull-ups to 3V3 on SDA/SCL when prototyping with a bare PMOD board.
 - **Rule**: Before debugging dock-I²C devices (AHT30, AT581X, …) in software, confirm a pull-up source is physically present. (from ToDo: 2026-05-11 ESP32-S3-BOX-3 + SENSOR 액세서리 전체 기능 점검)
 
-### 5.2 `idf.py` is not on the host PATH from the Claude Code shell
+### 5.2 `idf.py` is not on the Claude shell PATH (mitigated — see §5.7)
 
-- **Problem**: Project hook `.claude/hooks/post-write-build-check.ps1` is supposed to run `idf.py build` after edits, and Claude cannot run it manually either — the agent cannot verify builds without user assistance.
-- **Cause**: ESP-IDF is installed at `C:\Espressif\tools\python\v6.0.1\venv\` and exposed only via the Espressif export script, which the Claude session does not source.
-- **Fix**: Edits that touch `main/**`, `sdkconfig*`, or `idf_component.yml` must be followed by the user running `idf.py build && idf.py -p COM13 flash monitor` in their IDF shell and sharing the result.
-- **Rule**: After any source/config change, surface to the user that a manual `idf.py build && flash && monitor` cycle is required before treating the task as verified. (from ToDo: 2026-05-11 UI 흰색 → 검정, 2026-05-11 Accel/Gyro 진단, 2026-05-11 마이크/AHT30 진단)
+- **Problem**: Project hook `.claude/hooks/post-write-build-check.ps1` cannot run `idf.py build` after edits because `idf.py` is not on the shell's PATH.
+- **Cause**: ESP-IDF is installed at `C:\Espressif\tools\python\v6.0.1\venv\` and exposed only via Espressif's `Initialize-Idf.ps1` / `export.ps1`, neither of which is sourced into the Claude session.
+- **Fix**: Earlier sessions punted the build/flash to the user. As of 2026-05-11 there is a working in-shell recipe: see **§5.7** — set `IDF_PATH` / `IDF_TOOLS_PATH` / `IDF_PYTHON_ENV_PATH`, then `idf_tools.py export --format key-value` to dump the rest of the env, then call `idf.py` via the venv's `python.exe`. Run builds in the background (90 s+) and the hook in `.claude/hooks/post-write-build-check.ps1` can stay an indicative timeout.
+- **Rule**: Claude *can* drive build/flash directly now. The previous "ask the user to run idf.py manually" workaround is the fallback when the §5.7 recipe fails (e.g. fresh IDF install without constraints copy). (from ToDo: 2026-05-11 UI 흰색 → 검정, 2026-05-11 Accel/Gyro 진단, 2026-05-11 마이크/AHT30 진단, 2026-05-11 Beszel monitor flash)
 
 ### 5.3 BOX-3 USB-C data port + USB-Serial JTAG console required for flash
 
@@ -144,6 +144,43 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
 - **Cause**: The S3 exposes a composite USB device — interface 0 is CDC ACM (virtual COM port for `idf.py monitor`) and interface 1 is the JTAG endpoint (libusb-style, needs WinUSB). Windows does not always assign the right driver to each interface, and forcing WinUSB on the CDC half kills the COM port (or vice versa).
 - **Fix**: Run [Zadig](https://zadig.akeo.ie/) → `Options → List All Devices` → for the **CDC interface** keep/select the USB Serial (CDC) driver, for the **JTAG interface** install **WinUSB v6.x**. Replace, never globally swap.
 - **Rule**: After plugging a new BOX-3 (or a new Windows host), verify in Device Manager that the CDC half shows a COM port and the JTAG half shows `WinUSB` — do not run Zadig "Replace Driver" against the wrong interface. (from ToDo: 2026-05-11 ToDo/LP repo-local 전환 + 환경 LP 추가)
+
+### 5.7 In-shell `idf.py` recipe: bypass `Initialize-Idf.ps1`, drive env via `idf_tools.py export`
+
+- **Problem**: `Initialize-Idf.ps1` fails on this host (`idf-env config get` returns empty because `C:\Espressif\esp_idf.json` has `idfInstalled: {}` and the VS Code extension manages installs separately). `export.ps1` then falls back to a hard-coded `C:\Espressif\python_env\idf6.0_py3.12_env\` path that does not exist. Both errors leave `idf.py` undefined. Result: every prior session believed the build was impossible (see old §5.2).
+- **Cause**: This box has a hybrid setup — IDF tree at `C:\esp\.espressif\v6.0.1\esp-idf`, tools at `C:\Espressif\tools\`, Python venv at `C:\Espressif\tools\python\v6.0.1\venv\`. The Espressif installer-managed initialisation scripts assume a single canonical layout and break when it's split this way.
+- **Fix**: Bypass the init scripts. From PowerShell (works inside the Claude shell — tested with `run_in_background=true` for the actual build):
+   ```powershell
+   $env:IDF_PATH         = "C:\esp\.espressif\v6.0.1\esp-idf"
+   $env:IDF_TOOLS_PATH   = "C:\Espressif"
+   $env:IDF_PYTHON_ENV_PATH = "C:\Espressif\tools\python\v6.0.1\venv"
+   $py = "C:\Espressif\tools\python\v6.0.1\venv\Scripts\python.exe"
+   # idf_tools.py export dumps PATH + ESP_IDF_VERSION + a dozen other vars
+   foreach ($line in (& $py "$env:IDF_PATH\tools\idf_tools.py" export --format key-value)) {
+       if ($line -match '^([A-Za-z_]\w*)=(.*)$') {
+           $v = $Matches[2] -replace '%PATH%', $env:PATH
+           Set-Item "env:$($Matches[1])" $v
+       }
+   }
+   & $py "$env:IDF_PATH\tools\idf.py" build
+   ```
+   One-time prerequisite (the installer left a stray file): `Copy-Item C:\Espressif\tools\espidf.constraints.v6.0.txt C:\Espressif\espidf.constraints.v6.0.txt` — `idf.py` looks for the constraints at `$IDF_TOOLS_PATH/` but this install left them in `$IDF_TOOLS_PATH/tools/`.
+- **Rule**: For ESP-IDF on this host, never source `Initialize-Idf.ps1` or `export.ps1` from a Claude shell. Use the env-dump recipe above. The full build is ~1 minute on warm cache, ~3 minutes from clean — run with `run_in_background=true` so the cache stays warm during the wait. (from ToDo: 2026-05-11 Beszel monitor flash)
+
+### 5.8 Stale `idf_monitor.py` processes hold the COM port → flash fails with `PermissionError(13)`
+
+- **Problem**: `idf.py -p COM13 flash` failed with `Could not open COM13, the port is busy or doesn't exist. (PermissionError(13))`, but no visible monitor terminal was open in VS Code.
+- **Cause**: VS Code's `Ctrl+E D` (Build + Flash + Monitor) spawns `idf_monitor.py` as a child Python process. Closing the monitor terminal with its X button — instead of `Ctrl+]` — leaves the Python child orphaned. After several iterations, multiple stale monitors accumulate. On this box we found four: two against the IDF venv Python, two against Anaconda Python. Any one of them is enough to hold `COM13` exclusively.
+- **Fix**:
+   ```powershell
+   # Diagnose:
+   Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'idf_monitor|esp_idf_monitor' } |
+       Select-Object ProcessId, Name
+   # Kill:
+   <pids> | ForEach-Object { Stop-Process -Id $_ -Force }
+   ```
+   The Esp32-S3 USB-Serial-JTAG composite device exposes only one CDC interface, so a single live monitor is a hard lock on flash. There's no way to "share" the port.
+- **Rule**: Always exit ESP-IDF monitor with `Ctrl+]`, never with the terminal's X. If `flash` fails with `PermissionError(13)` and you "know" the monitor is closed, grep `Win32_Process` for `idf_monitor` before doing anything else. (from ToDo: 2026-05-11 Beszel monitor flash)
 
 ### 5.6 `gh` CLI missing from PATH; bring-up via portable zip into `%LOCALAPPDATA%\Programs\gh`
 
