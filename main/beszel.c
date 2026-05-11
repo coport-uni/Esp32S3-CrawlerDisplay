@@ -44,6 +44,7 @@ typedef struct {
     float    mem;          /* 0..100 */
     float    gpu;          /* 0..100 if gpu_present, else NaN */
     bool     gpu_present;
+    float    disk;         /* 0..100; Beszel `info.dp`, defaults to 0 if absent */
     uint32_t uptime_s;
 } beszel_system_t;
 
@@ -273,6 +274,7 @@ static void parse_one_system(cJSON *item, beszel_system_t *out)
     static const char *cpu_keys[]   = { "cpu", "c", NULL };
     static const char *mem_keys[]   = { "mp", "memory", "mem", "m", NULL };
     static const char *gpu_keys[]   = { "g", "gpu", "gp", NULL };
+    static const char *disk_keys[]  = { "dp", "disk", "diskPercent", NULL };
     static const char *up_keys[]    = { "u", "uptime", NULL };
 
     try_get_number(item, info, cpu_keys, &out->cpu);
@@ -284,6 +286,9 @@ static void parse_one_system(cJSON *item, beszel_system_t *out)
         out->gpu = 0.0f;
     }
     out->gpu_present = true;
+    if (!try_get_number(item, info, disk_keys, &out->disk)) {
+        out->disk = 0.0f;
+    }
     try_get_uint(item, info, up_keys, &out->uptime_s);
 }
 
@@ -309,6 +314,7 @@ static void publish_all_to_ui(void)
         local_hosts[i].gpu_present = s_systems[i].gpu_present;
         local_hosts[i].gpu_pct     = s_systems[i].gpu_present
             ? (int)(s_systems[i].gpu + 0.5f) : 0;
+        local_hosts[i].disk_pct    = (int)(s_systems[i].disk + 0.5f);
         local_hosts[i].uptime_s    = s_systems[i].uptime_s;
     }
     xSemaphoreGive(s_mtx);

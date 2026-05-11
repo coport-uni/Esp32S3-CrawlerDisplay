@@ -14,6 +14,7 @@ typedef struct {
     int         mem_pct;
     int         gpu_pct;
     bool        gpu_present;
+    int         disk_pct;
     uint32_t    uptime_s;
 } ui_beszel_host_t;
 

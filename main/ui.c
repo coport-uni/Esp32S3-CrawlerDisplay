@@ -33,6 +33,8 @@ typedef struct {
     lv_obj_t *lbl_mem_val;
     lv_obj_t *bar_gpu;
     lv_obj_t *lbl_gpu_val;
+    lv_obj_t *bar_disk;
+    lv_obj_t *lbl_disk_val;
     char      host_name[HOST_NAME_MAX_LEN];
 } host_ui_t;
 
@@ -56,6 +58,19 @@ static int clamp_pct(int v)
     if (v < 0)   return 0;
     if (v > 100) return 100;
     return v;
+}
+
+/* Cyan up to 70%, yellow 70-89%, pink at 90%+. Threshold change driven by
+ * user preference — flag pressure on any resource (CPU/MEM/GPU/DISK). */
+static lv_color_t bar_color_for_pct(int pct)
+{
+    if (pct >= 90) {
+        return COLOR_PINK;
+    }
+    if (pct >= 70) {
+        return COLOR_WARN;
+    }
+    return COLOR_ACCENT;
 }
 
 static void format_uptime(uint32_t seconds, char *buf, size_t cap)
@@ -121,16 +136,18 @@ static void build_host_tab(lv_obj_t *tab, host_ui_t *ui)
     lv_obj_set_style_text_color(ui->lbl_uptime, COLOR_MUTED, 0);
     lv_obj_align(ui->lbl_uptime, LV_ALIGN_TOP_RIGHT, 0, 0);
 
-    build_metric_row(tab, "CPU", 30, &ui->bar_cpu, &ui->lbl_cpu_val);
-    build_metric_row(tab, "MEM", 60, &ui->bar_mem, &ui->lbl_mem_val);
-    build_metric_row(tab, "GPU", 90, &ui->bar_gpu, &ui->lbl_gpu_val);
+    build_metric_row(tab, "CPU",  30, &ui->bar_cpu,  &ui->lbl_cpu_val);
+    build_metric_row(tab, "MEM",  60, &ui->bar_mem,  &ui->lbl_mem_val);
+    build_metric_row(tab, "GPU",  90, &ui->bar_gpu,  &ui->lbl_gpu_val);
+    build_metric_row(tab, "DISK", 120, &ui->bar_disk, &ui->lbl_disk_val);
 }
 
 static void apply_host_data(host_ui_t *ui, const ui_beszel_host_t *h)
 {
-    int cpu = clamp_pct(h->cpu_pct);
-    int mem = clamp_pct(h->mem_pct);
-    int gpu = clamp_pct(h->gpu_pct);
+    int cpu  = clamp_pct(h->cpu_pct);
+    int mem  = clamp_pct(h->mem_pct);
+    int gpu  = clamp_pct(h->gpu_pct);
+    int disk = clamp_pct(h->disk_pct);
 
     lv_obj_set_style_bg_color(ui->dot_status,
                               h->up ? COLOR_OK : COLOR_PINK, 0);
@@ -142,14 +159,18 @@ static void apply_host_data(host_ui_t *ui, const ui_beszel_host_t *h)
     format_uptime(h->uptime_s, ub, sizeof(ub));
     lv_label_set_text(ui->lbl_uptime, ub);
 
+    lv_obj_set_style_bg_color(ui->bar_cpu, bar_color_for_pct(cpu),
+                              LV_PART_INDICATOR);
     lv_bar_set_value(ui->bar_cpu, cpu, LV_ANIM_OFF);
     lv_label_set_text_fmt(ui->lbl_cpu_val, "%d%%", cpu);
 
+    lv_obj_set_style_bg_color(ui->bar_mem, bar_color_for_pct(mem),
+                              LV_PART_INDICATOR);
     lv_bar_set_value(ui->bar_mem, mem, LV_ANIM_OFF);
     lv_label_set_text_fmt(ui->lbl_mem_val, "%d%%", mem);
 
     if (h->gpu_present) {
-        lv_obj_set_style_bg_color(ui->bar_gpu, COLOR_ACCENT,
+        lv_obj_set_style_bg_color(ui->bar_gpu, bar_color_for_pct(gpu),
                                   LV_PART_INDICATOR);
         lv_bar_set_value(ui->bar_gpu, gpu, LV_ANIM_OFF);
         lv_label_set_text_fmt(ui->lbl_gpu_val, "%d%%", gpu);
@@ -159,6 +180,11 @@ static void apply_host_data(host_ui_t *ui, const ui_beszel_host_t *h)
         lv_bar_set_value(ui->bar_gpu, 0, LV_ANIM_OFF);
         lv_label_set_text(ui->lbl_gpu_val, "N/A");
     }
+
+    lv_obj_set_style_bg_color(ui->bar_disk, bar_color_for_pct(disk),
+                              LV_PART_INDICATOR);
+    lv_bar_set_value(ui->bar_disk, disk, LV_ANIM_OFF);
+    lv_label_set_text_fmt(ui->lbl_disk_val, "%d%%", disk);
 }
 
 /* ---------------------- tabview lifecycle ---------------------- */
