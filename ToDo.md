@@ -84,3 +84,33 @@
 - [x] `idf.py build` 통과 확인 (사용자 IDF 환경 — 워닝 0)
 - [x] flash + monitor: Audio 탭에서 마이크에 소리 입력 시 RMS bar가 즉시 반응 — 사용자 확인 ✅
 - [x] Beep 버튼 / status 라벨 동작 확인 — 사용자 확인 ✅
+
+## 2026-05-11 | Beszel(http://10.16.21.197:8090) 모니터링 탭 추가
+
+계획 파일: `C:\Users\USER_55_DeepLearning\.claude\plans\beszel-http-10-16-21-197-8090-esp32-resilient-bee.md` (사용자 ExitPlanMode 승인 완료)
+
+UX: 한 호스트씩 CPU/Memory/GPU 바 그래프. CONFIG(=이전) / MUTE(=다음) 버튼으로 호스트 전환. WPA2-Personal, 폴링 5초. GPU 없으면 회색 + "N/A". 자격증명은 menuconfig(`sdkconfig` 로컬, .gitignore 확인) 한정.
+
+관련 LP: §5.2(idf.py PATH 없음 → 빌드/플래시는 사용자 환경), §2.1(sdkconfig 우선순위), §3.6(헤더로 시그니처 검증).
+
+### 작업 항목
+
+- [x] `main/Kconfig.projbuild` 신규: BESZEL_WIFI_SSID/PASSWORD/SERVER_URL/USER/PASSWORD/POLL_INTERVAL_S/MAX_HOSTS
+- [x] `.gitignore`에 `sdkconfig` 추가 + `git rm --cached sdkconfig` (사용자 결정: 자격증명 누출 방지)
+- [x] `main/network.h/c` 신규: WiFi STA 비차단 초기화 + auto-reconnect (`esp_wifi_connect` on disconnect) + `network_wait_connected`
+- [x] `main/beszel.h/c` 신규: PocketBase 인증, /api/collections/systems/records 폴링, cJSON 파싱, 토큰 5h30m 사전 갱신 + 401 재인증 1회 재시도, `s_systems[]` 캐시, `beszel_select_prev/next`
+- [x] `main/beszel.c` 첫 응답 1회 raw JSON 로깅(`s_logged_raw_systems` 플래그, 256바이트 청크). GPU 필드는 `g`/`gpu`/`gp` 순서로 root 또는 `info.{...}` 양쪽 탐색 — 첫 부팅 후 raw 로그에서 실제 경로 확정 시 `parse_one_system`의 `gpu_keys[]` 1줄 수정
+- [x] `main/ui.h` 확장: `ui_beszel_host_t` + `ui_beszel_set_host/set_status/set_unavailable`. (계획에 있던 `ui_callbacks_t.on_btn_config/on_btn_mute`는 실제 호출 경로가 ui→cb가 아닌 buttons_check→cb라 추가하지 않음 — 죽은 필드 회피)
+- [x] `main/ui.c`: 7번째 탭 "Beszel" (호스트명 + 상태닷 + N/M 인덱스 + CPU/MEM/GPU 바 + 푸터). `make_metric_row` 헬퍼로 3개 바 행 공통화. GPU 없을 때 회색 인디케이터 + "N/A"
+- [x] `main/buttons_check.h/c`: `buttons_callbacks_t` 추가, `buttons_check_init(const buttons_callbacks_t *)`. on_short에서 카운터 업데이트 후 인덱스별 콜백 분기 — Btn 탭 카운터 표시 유지
+- [x] `main/main.c`: `on_config_pressed`=`beszel_select_prev`, `on_mute_pressed`=`beszel_select_next` 콜백 + `buttons_check_init(&btn_cbs)` + `network_init()` + `beszel_init()` 호출
+- [x] `main/CMakeLists.txt`: SRCS `network.c`/`beszel.c` 추가, REQUIRES `nvs_flash esp_wifi esp_netif esp_event esp_http_client esp-tls json`
+- [x] `idf.py menuconfig`로 WiFi SSID/PW + BESZEL_USER/PW 입력 → `idf.py build && flash && monitor` 완료 (사용자 확인)
+- [x] 시리얼 로그: `network: got IP 192.168.1.206`, `beszel: auth OK (token len=224)`, raw systems response 815 bytes 1회 출력 확인. `info.cpu/mp/dp/g` 필드 경로 확정 (idle 0%일 때 `info.g`가 omitempty로 빠지는 v0.18.x 동작 확인)
+- [x] Beszel 웹 UI(H200Server/3090Server)와 CPU/MEM 수치 일치 — 사용자 확인 ✅
+- [x] CONFIG/MUTE 버튼으로 탭 전환 동작 — 사용자 확인 ✅
+- [x] **계획 중간 변경**: 단일 Beszel 탭 + 다른 모듈 탭 → "탭 = 호스트" 구성으로 전면 재설계. sensors.c/h, audio_check.c/h, ir_check.c/h 삭제하고 sensor_example/에 보존된 이전 스냅샷을 README에서 설명. ui.c는 동적 tabview rebuild 패턴으로 재작성
+- [x] GPU 표시 결정: `info.g` 누락 시 N/A 대신 0% 표시 (omitempty 모호성 해소) — 사용자 결정
+- [x] `LearnedPatterns.md` §3.7–3.10, §5.6에 신규 함정 5건 등록 (json 컴포넌트 v6.x 변경, NAME_MAX picolibc 충돌, uint32_t printf, info.g omitempty, gh CLI 부재시 portable 설치)
+- [x] README.md 전면 재작성: Beszel monitor를 메인으로, sensor_example/를 이전 자체 진단 펌웨어 스냅샷으로 설명
+- [x] GitHub Issue 생성: https://github.com/coport-uni/Esp32S3-CrawlerDisplay/issues/2

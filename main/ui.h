@@ -8,30 +8,48 @@ extern "C" {
 #endif
 
 typedef struct {
-    void (*on_beep)(void);
-    void (*on_ir_send)(void);
-} ui_callbacks_t;
+    const char *name;
+    bool        up;
+    int         cpu_pct;
+    int         mem_pct;
+    int         gpu_pct;
+    bool        gpu_present;
+    uint32_t    uptime_s;
+} ui_beszel_host_t;
 
-void ui_create(const ui_callbacks_t *cbs);
+/**
+ * Build the LVGL screen. Must be called inside bsp_display_lock /
+ * bsp_display_unlock. After this the screen has an empty tabview plus
+ * a status footer, ready for ui_beszel_replace_hosts() to populate.
+ */
+void ui_create(void);
 
-void ui_imu_update(float ax, float ay, float az,
-                   float gx, float gy, float gz,
-                   float tilt_deg);
+/**
+ * Refresh the host tab list. When the host count or any host name
+ * differs from the previous call the tabview is rebuilt; otherwise the
+ * existing widgets are just updated in place. `active_idx` is clamped
+ * to the new tab count.
+ */
+void ui_beszel_replace_hosts(const ui_beszel_host_t *hosts, int count,
+                             int active_idx);
 
-void ui_humiture_update(float temp_c, float humidity_pct);
-void ui_humiture_set_status(const char *msg);
+/**
+ * Change which tab is currently showing without touching the data.
+ * Out-of-range indices are silently ignored.
+ */
+void ui_beszel_select_tab(int idx);
 
-void ui_radar_set_present(bool present, uint32_t event_count);
+/**
+ * Update the screen-level status footer. `color_hex` uses 0xRRGGBB so
+ * callers do not need to include lvgl.h.
+ */
+void ui_beszel_set_status(const char *msg, uint32_t color_hex);
 
-void ui_audio_set_mic_rms(int rms);
-void ui_audio_set_status(const char *msg);
-
-void ui_ir_update(uint32_t rx_pulses, uint32_t last_rx_ms);
-void ui_ir_set_status(const char *msg);
-
-void ui_buttons_update(int idx, uint32_t short_count, uint32_t long_count);
-
-void ui_uptime_update(uint64_t seconds);
+/**
+ * Helper for "no data yet" / "WiFi missing" / "auth failed" states:
+ * empties the tabview, writes `reason` into the footer in muted gray.
+ */
+void ui_beszel_set_unavailable(const char *reason);
 
 #ifdef __cplusplus
 }

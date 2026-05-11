@@ -67,6 +67,34 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
 - **Fix**: Check `== ESP_CODEC_DEV_OK` (or `== 0`) for success, and trust that the buffer was filled with exactly the requested `len` bytes (the wrapper blocks on `i2s_channel_read` with `DEFAULT_WAIT_TIMEOUT` until full).
 - **Rule**: For any `esp_codec_dev_*` API, look up the return convention in `esp_codec_dev_types.h` before writing the success check. Don't reuse POSIX `read`/`write` muscle memory. (from ToDo: 2026-05-11 마이크 RMS 0 + beep 항상 실패 수정)
 
+### 3.7 ESP-IDF v6.x dropped the in-tree `json` component — use `espressif/cjson`
+
+- **Problem**: `idf.py reconfigure` failed with `CMake Error ... Failed to resolve component 'json' required by component 'main': unknown name.` on a project that builds fine under ESP-IDF v5.x.
+- **Cause**: In ESP-IDF v6.0+, cJSON was moved out of the IDF tree and is now distributed exclusively through the [ESP Component Registry](https://components.espressif.com/) as `espressif/cjson`. No `components/json/` exists under the v6.0.1 install.
+- **Fix**: Declare the dependency in `main/idf_component.yml` (`espressif/cjson: "^1.7.18"`) and remove `json` from `REQUIRES`. The header is still `cJSON.h` (capital J).
+- **Rule**: When porting a project to ESP-IDF v6.x, audit `REQUIRES` against the in-tree component list — anything historical (`json`, possibly others) needs a managed-component replacement declared in `idf_component.yml`. (from ToDo: 2026-05-11 Beszel monitor)
+
+### 3.8 Beszel `info.g` (GPU usage) is `omitempty` — single snapshot cannot tell "no GPU" from "0 %"
+
+- **Problem**: H200Server and 3090Server (both confirmed to have NVIDIA GPUs) showed `GPU N/A` in the Beszel tab, even though the Beszel web UI displayed GPU graphs for them.
+- **Cause**: In Beszel v0.18.x the `Info` struct serializes GPU usage as `GpuPct float64 \`json:"g,omitempty"\``. The `omitempty` tag means when current GPU usage is exactly `0.0`, the `g` key is dropped from the JSON of `/api/collections/systems/records`. Idle GPUs (CPU also reported ~0.05–0.16%) leave the field absent entirely; a single response cannot distinguish "GPU absent" from "GPU idle".
+- **Fix**: Treat the GPU row as always present in the UI; render `info.g` value if the key exists, default to `0%` otherwise. The Beszel web UI achieves the same illusion by also reading the time-series `system_stats` records and picking up past non-zero samples.
+- **Rule**: When parsing Beszel (or any Go-serialised) snapshot JSON, never rely on field *presence* to decide capability — `omitempty` hides zero values. If you need a definitive "feature exists?" signal, query the time-series `system_stats` for a non-zero sample, or accept that you cannot disambiguate from a single snapshot. (from ToDo: 2026-05-11 Beszel monitor)
+
+### 3.9 `NAME_MAX` is a picolibc filesystem constant (255) — do not redefine
+
+- **Problem**: `main/beszel.c:29: error: 'NAME_MAX' redefined [-Werror]` after introducing a `#define NAME_MAX 32` for the host-name buffer length.
+- **Cause**: The xtensa-esp-elf toolchain ships **picolibc**, whose `<sys/syslimits.h>` defines `NAME_MAX 255` (max file name length). The BSP / FreeRTOS header chain pulls `<limits.h>` → `<syslimits.h>` long before user code is parsed. Any later `#define NAME_MAX <n>` collides under `-Werror`.
+- **Fix**: Rename the project-local constant (e.g. `HOST_NAME_MAX_LEN`). Same advice applies to any other POSIX-flavoured `*_MAX` name — `PATH_MAX`, `LINE_MAX`, etc.
+- **Rule**: Prefix project constants that *could* clash with POSIX with a module name (`BESZEL_NAME_MAX`, `UI_NAME_MAX`). picolibc is strict and shows up early. (from ToDo: 2026-05-11 Beszel monitor)
+
+### 3.10 picolibc `uint32_t` is `unsigned long`, not `unsigned int` — `%u` is wrong
+
+- **Problem**: `printf("Up %ud %uh", d, h)` with `uint32_t d, h` raised `-Werror=format=`: *expects 'unsigned int', argument has type 'uint32_t' {aka 'long unsigned int'}*.
+- **Cause**: On the xtensa target with picolibc, `uint_least32_t` / `uint32_t` are typedefed to `unsigned long` (not `unsigned int`), making them mismatch `%u`. Glibc commonly types them as `unsigned int`, hiding this elsewhere.
+- **Fix**: Use `PRIu32` / `PRId32` from `<inttypes.h>` (recommended for portability), or cast at the call site: `printf("%u", (unsigned)x)`. Format specifier `%lu` also works but is wrong on platforms where `uint32_t` is `unsigned int`.
+- **Rule**: Never use `%u` / `%d` / `%x` with `uint32_t` directly on ESP-IDF — always cast or use `PRIu32`. Same goes for `uint64_t` (use `PRIu64`, not `%llu`). (from ToDo: 2026-05-11 Beszel monitor)
+
 ### 3.6 `bsp_i2c_get_handle()` returns the handle; does not take `&out`
 
 - **Problem**: Earlier draft tried `bsp_i2c_get_handle(&bus)` and `icm42670_create(&cfg, &handle)`, both of which fail to compile or link.
@@ -116,6 +144,13 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
 - **Cause**: The S3 exposes a composite USB device — interface 0 is CDC ACM (virtual COM port for `idf.py monitor`) and interface 1 is the JTAG endpoint (libusb-style, needs WinUSB). Windows does not always assign the right driver to each interface, and forcing WinUSB on the CDC half kills the COM port (or vice versa).
 - **Fix**: Run [Zadig](https://zadig.akeo.ie/) → `Options → List All Devices` → for the **CDC interface** keep/select the USB Serial (CDC) driver, for the **JTAG interface** install **WinUSB v6.x**. Replace, never globally swap.
 - **Rule**: After plugging a new BOX-3 (or a new Windows host), verify in Device Manager that the CDC half shows a COM port and the JTAG half shows `WinUSB` — do not run Zadig "Replace Driver" against the wrong interface. (from ToDo: 2026-05-11 ToDo/LP repo-local 전환 + 환경 LP 추가)
+
+### 5.6 `gh` CLI missing from PATH; bring-up via portable zip into `%LOCALAPPDATA%\Programs\gh`
+
+- **Problem**: CLAUDE.md §4 mandates `gh issue create` per task, but `gh: command not found` from every shell. No `winget`, `scoop`, or `choco` available — fresh Windows install with package managers absent.
+- **Cause**: The Windows 11 Education image on this host did not ship with App Installer / winget. ESP-IDF tooling does not pull `gh` transitively. The Espressif Python venv path also has no `gh` shim.
+- **Fix**: Download the latest GitHub CLI Windows zip directly via the API (`https://api.github.com/repos/cli/cli/releases/latest`), extract to `%LOCALAPPDATA%\Programs\gh`, and prepend `\bin` to **User-scoped** PATH using `[Environment]::SetEnvironmentVariable("PATH", ..., "User")`. No admin rights needed. `gh` was already authenticated via keyring from a previous login (scope `repo`), so `gh issue create --repo …` worked immediately.
+- **Rule**: On a Windows host where `gh` is missing **and** no package manager is available, use the portable zip release flow above — single PowerShell command, persistent across sessions, fully user-scoped. Avoids touching system PATH or asking for admin. (from ToDo: 2026-05-11 Beszel monitor)
 
 ### 5.5 Use the ESP-IDF VS Code extension instead of a separate IDF shell
 

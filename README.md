@@ -1,27 +1,40 @@
-# ESP32-S3-BOX-3 Sensor Self-Test Firmware
+# ESP32-S3-BOX-3 Beszel Monitor
 
-A diagnostic firmware for the [ESP32-S3-BOX-3](https://github.com/espressif/esp-box) development kit and its [BOX-3-SENSOR](https://www.espressif.com/en/products/devkits) extension board. Boots into a six-tab LVGL dashboard on the on-board 320×240 LCD and exercises every peripheral so you can confirm the board is healthy before building on top of it.
-
-| Tab | What it shows |
-|-----|---------------|
-| **IMU** | Live accelerometer (g), gyroscope (dps), and tilt angle from the on-board ICM42670 |
-| **Env** | Temperature / humidity from the AHT30 on the SENSOR extension |
-| **Radar** | AT581X presence detection events + count |
-| **Audio** | ES7210 mic RMS bar + "Beep" button that plays a 1 kHz tone through the ES8311 speaker |
-| **IR** | RX pulse count + "Send Test" NEC frame over the on-board IR diodes |
-| **Btn** | Short / long press counters for CONFIG, MUTE, MAIN buttons |
+A LVGL dashboard for the [ESP32-S3-BOX-3](https://github.com/espressif/esp-box) that polls a self-hosted [Beszel](https://beszel.dev/) (PocketBase) instance over HTTP and renders **one tab per monitored host** on the 320×240 LCD. Each tab shows the host's live CPU, memory and GPU usage as horizontal bars, plus uptime and an UP/DOWN status indicator.
 
 This README walks an absolute beginner from a fresh Windows PC to flashing the firmware. If you have already used ESP-IDF, jump straight to [Build, Flash, Monitor](#5-build-flash-monitor).
 
 ---
 
+## Screen layout
+
+```
+┌─────────────────────────────────────┐
+│ H200Server │ 3090Server │ ...       │ ← tab bar (one per Beszel host)
+├─────────────────────────────────────┤
+│ ● UP                  Up 42d 5h     │
+│ CPU  ██████░░░░░░░░░░░░░░  12%      │
+│ MEM  ████░░░░░░░░░░░░░░░░   4%      │
+│ GPU  ███░░░░░░░░░░░░░░░░░░  18%     │
+│                                     │
+├─────────────────────────────────────┤
+│ updated 4s ago                      │ ← status footer (WiFi / auth / poll state)
+└─────────────────────────────────────┘
+```
+
+- **Tab name** = Beszel host name (e.g. `H200Server`).
+- **`CONFIG` / `MUTE`** buttons cycle active tab (prev / next). Touch swipe works natively.
+- **Status footer**: `WiFi connecting…` / `auth failed (menuconfig)` / `updated Ns ago` / `stale Ns`.
+
+---
+
 ## Hardware required
 
-- **ESP32-S3-BOX-3** main board (rev with ICM42670 IMU; revs ship with either GT911 or TT21100 touch controller — both supported by the BSP)
-- **ESP32-S3-BOX-3-SENSOR** extension (provides AHT30, AT581X radar, IR LEDs; plugs into the PMOD1 connector). Without it the Env / Radar / IR tabs stay idle — the IMU / Audio / Btn tabs still work.
+- **ESP32-S3-BOX-3** main board (any revision — both GT911 and TT21100 touch controllers are supported by the BSP)
 - A **USB-C cable that carries data** (a charge-only cable is the #1 cause of "device not detected")
+- A reachable **Beszel** server on the same WiFi network (HTTP / HTTPS both work; the project defaults to plain HTTP)
 
-The BOX-3 main board has **no I²C pull-ups on the PMOD1 dock bus** — they live on the SENSOR extension. Make sure the extension is seated firmly before debugging Env / Radar issues.
+The previous board self-test firmware (which also exercised the BOX-3-SENSOR extension's IMU, AHT30, AT581X radar, IR, and audio peripherals) is preserved as a frozen reference under [`sensor_example/`](sensor_example/) — see [Prior firmware: sensor_example/](#prior-firmware-sensor_example) below.
 
 ---
 
@@ -70,9 +83,31 @@ Symptoms of getting Zadig wrong:
 - No COM port appears → CDC interface mis-driven.
 - `idf.py flash` complains about libusb / cannot open device → JTAG interface mis-driven.
 
-## 5. Build, Flash, Monitor
+## 5. Configure WiFi + Beszel credentials
 
-The extension binds every common action to a chord shortcut starting with `Ctrl+E`. Use these inside any source file of this project:
+The build needs your WiFi SSID/password and a Beszel user/password before anything will show on screen. Open the Kconfig editor:
+
+```
+Ctrl+E G                # or Command Palette → "ESP-IDF: SDK Configuration editor"
+```
+
+Navigate to `(Top) → Beszel monitor` and fill in:
+
+| Option | Example value |
+|---|---|
+| WiFi SSID | `home-2.4g` |
+| WiFi password | `…` |
+| Beszel base URL | `http://10.16.21.197:8090` |
+| Beszel identity | `you@example.com` |
+| Beszel password | `…` |
+| Poll interval (seconds) | `5` (default) |
+| Max hosts cached | `16` (default) |
+
+Save and close. Values land in the **local `sdkconfig`** file, which is git-ignored — credentials never get committed. `sdkconfig.defaults` only carries non-secret hardware defaults (PSRAM, flash size, etc.) and stays tracked.
+
+## 6. Build, Flash, Monitor
+
+The extension binds every common action to a chord shortcut starting with `Ctrl+E`:
 
 | Shortcut | What it does |
 |----------|--------------|
@@ -85,20 +120,22 @@ The extension binds every common action to a chord shortcut starting with `Ctrl+
 | `Ctrl+E G` | Open the graphical menuconfig (Kconfig) |
 | `Ctrl+Shift+P` → `ESP-IDF: …` | Anything else (full clean, reconfigure, etc.) |
 
-First-time sequence: `Ctrl+E T` → `Ctrl+E P` → `Ctrl+E D`. After that, only `Ctrl+E D` for every iteration.
+First-time sequence: `Ctrl+E T` → `Ctrl+E P` → `Ctrl+E G` (credentials) → `Ctrl+E D`. After that, only `Ctrl+E D` for every iteration.
 
 Expected first-boot output (truncated):
 ```
-I (xxx) main: BOX-3 + SENSOR self-test starting
-I (xxx) ili9341: LCD panel create success
+I (xxx) main: Beszel monitor starting
 I (xxx) ESP-BOX-3: Setting LCD backlight: 100%
-I (xxx) ui: tabview UI created
-I (xxx) SENSOR_HUB: Sensor created, ... sensor_hub_aht30
-I (xxx) ES7210: Enable ES7210_INPUT_MIC1 / MIC2
-I (xxx) ES7210: Unmuted
-I (xxx) main: init complete
+I (xxx) ui: ui ready
+I (xxx) network: starting wifi, ssid="..."
+I (xxx) network: got IP 192.168.x.x
+I (xxx) beszel: auth OK (token len=NNN)
+I (xxx) beszel: raw systems response (NNN bytes), first chunk follows:
+I (xxx) beszel:  {"items":[ ... full JSON of every monitored host ... ]}
+I (xxx) beszel: K systems parsed
 ```
-The LCD should now show six tabs across the top.
+
+The LCD then shows one tab per Beszel host.
 
 ---
 
@@ -107,51 +144,70 @@ The LCD should now show six tabs across the top.
 ```
 Espress_dev/
 ├── main/
-│   ├── main.c            # app_main: init order (I2C → display → sensors → tasks)
-│   ├── ui.c, ui.h        # LVGL tabview + per-tab widgets, thread-safe update helpers
-│   ├── sensors.c, .h     # IMU polling task, AHT30 sensor_hub wiring, AT581X radar ISR
-│   ├── audio_check.c, .h # ES7210 mic RMS task, ES8311 beep task
-│   ├── ir_check.c, .h    # RMT-based IR RX/TX
-│   ├── buttons_check.c   # Physical buttons via espressif/button component
-│   ├── CMakeLists.txt    # Component sources + esp-box-3 BSP dependency
-│   └── idf_component.yml # Managed components (BSP, ICM42670)
-├── sdkconfig.defaults    # Hardware-specific Kconfig (16 MB flash, octal PSRAM, LVGL float, …)
-├── managed_components/   # Auto-pulled libraries — DO NOT EDIT BY HAND
-├── CLAUDE.md             # Coding rules + initialization order documentation
-├── LearnedPatterns.md    # Bugs we hit and how we found them (read this when stuck)
-├── ToDo.md               # Project history (append-only)
-└── README.md             # This file
+│   ├── main.c            # app_main: bsp → ui_create → buttons → network → beszel
+│   ├── ui.c, ui.h        # dynamic per-host tabview + status footer (UI_WITH_LOCK guarded)
+│   ├── network.c, .h     # non-blocking WiFi STA + auto-reconnect task
+│   ├── beszel.c, .h      # PocketBase REST client + 5s poll task + host cache
+│   ├── buttons_check.c, .h  # CONFIG / MUTE physical buttons → tab nav callbacks
+│   ├── Kconfig.projbuild # menuconfig entries for WiFi + Beszel credentials
+│   ├── CMakeLists.txt    # SRCS + REQUIRES (esp_wifi, esp_http_client, ...)
+│   └── idf_component.yml # Managed components (esp-box-3 BSP, espressif/cjson)
+├── sensor_example/       # frozen snapshot of the prior BOX-3 self-test (read-only)
+├── sdkconfig.defaults    # hardware Kconfig (16 MB flash, octal PSRAM, LVGL float, …)
+├── managed_components/   # auto-pulled libraries — DO NOT EDIT BY HAND
+├── CLAUDE.md             # coding rules + initialization order documentation
+├── LearnedPatterns.md    # bugs we hit and how we found them (read when stuck)
+├── ToDo.md               # append-only project history
+└── README.md             # this file
 ```
 
-`app_main` initialization order is non-negotiable (see [CLAUDE.md](CLAUDE.md) "Initialization order"): I²C → display → backlight → UI under display lock → sensors → audio → tasks. Touching this order breaks LVGL or panics during boot.
+`app_main` initialization order is non-negotiable (see [CLAUDE.md](CLAUDE.md) "Initialization order"): I²C → display → backlight → UI under display lock → buttons → network → Beszel. Touching this order risks LVGL panics or WiFi/HTTP failure modes that look like network bugs.
+
+---
+
+## Prior firmware: `sensor_example/`
+
+`sensor_example/` holds a **frozen copy of the previous firmware** that the BOX-3 ran before this project pivoted to monitoring Beszel. It boots a six-tab LVGL dashboard that exercises every peripheral on the ESP32-S3-BOX-3 + BOX-3-SENSOR extension board:
+
+| Tab | What it shows |
+|-----|---------------|
+| **IMU** | Live accel / gyro / tilt from the on-board ICM42670 |
+| **Env** | Temperature / humidity from the AHT30 on the SENSOR extension |
+| **Radar** | AT581X presence detection events + count |
+| **Audio** | ES7210 mic RMS bar + "Beep" button (ES8311 speaker, 1 kHz tone) |
+| **IR** | RX pulse count + "Send Test" NEC frame over the IR diodes |
+| **Btn** | Short / long press counters for CONFIG, MUTE, MAIN buttons |
+
+It existed to **verify each peripheral worked** before any application code was written. Now that those peripherals are confirmed and the project's purpose has narrowed to the Beszel dashboard, the self-test source lives in `sensor_example/` as documentation: copy it back into `main/` and rebuild if you ever need to re-validate the board or port an individual sensor driver into a new project.
+
+The folder is **not compiled by the top-level `CMakeLists.txt`** — it is reference material only. To rebuild and flash the old self-test, temporarily point `main/`'s CMake at `sensor_example/` (or copy its files into `main/`) and run the standard build/flash flow.
 
 ---
 
 ## Common pitfalls
 
-These cost us real time and are documented in detail with file/line references in [LearnedPatterns.md](LearnedPatterns.md):
+These cost real time and are documented in detail with file/line references in [LearnedPatterns.md](LearnedPatterns.md):
 
-- **Accelerometer / gyro display shows just `f`** — LVGL's builtin `sprintf` strips `%f` unless `CONFIG_LV_USE_FLOAT=y`. Already set in `sdkconfig.defaults` (and `sdkconfig`).
-- **AHT30 Temp / Hum stays at `---`** — the BSP routes humiture through `i2c_dock_handle` (GPIO 40 / 41), which is the PMOD1 connector. Without the SENSOR extension plugged in there is no sensor to talk to.
-- **AHT30 reachable but callback never fires** — `iot_sensor_handler_register_with_type` binds to the macro event base, while the polling task posts to a per-instance dynamic base. Use `iot_sensor_handler_register(handle, cb, NULL)` instead. ([sensors.c](main/sensors.c) follows this rule already.)
-- **Mic RMS bar stuck at 0** — `esp_codec_dev_read` / `_write` return `ESP_CODEC_DEV_OK` (= 0) on success, **not** the byte count. Compare against `ESP_CODEC_DEV_OK`, not `> 0`.
+- **`json` component is missing in ESP-IDF v6.x** — cJSON is now the standalone managed component `espressif/cjson`. The legacy `REQUIRES json` line fails to resolve. Declare `espressif/cjson` in [main/idf_component.yml](main/idf_component.yml).
+- **`NAME_MAX` collides with picolibc's filesystem constant** (255). The xtensa-esp-elf toolchain pulls `<sys/syslimits.h>` transitively through BSP / FreeRTOS headers — never `#define NAME_MAX` in your own code. Rename to e.g. `HOST_NAME_MAX_LEN`.
+- **`printf("%u", uint32_t)` is `-Werror=format=` under picolibc** — on the xtensa target, `uint32_t = unsigned long`, not `unsigned int`. Cast to `(unsigned)` or use `PRIu32` from `<inttypes.h>`.
+- **Beszel `info.g` (GPU usage) is `omitempty`** — when current GPU usage is exactly 0 %, the JSON field is dropped entirely. A single snapshot of `/api/collections/systems/records` cannot distinguish "host has no GPU" from "host's GPU is idle". This firmware sidesteps the ambiguity by always rendering the GPU bar and defaulting to 0 % when the field is absent.
 - **`idf.py flash` cannot find the chip** — usually the USB-C cable is power-only, or Zadig drivers are swapped.
-- **The `f` literal output, the missing AHT events, the stuck RMS bar all share one pattern**: the build is clean and logs look healthy, but a library convention silently drops the data path. When something "just doesn't update" with no error, suspect a return-value or event-base convention before suspecting hardware.
+- **`sdkconfig` overrides `sdkconfig.defaults`** once it exists. If you flip a Kconfig value in `sdkconfig.defaults` but the build still uses the old value, the answer is in `sdkconfig` — either patch it there too, or delete it and `idf.py reconfigure`.
 
 ---
 
-## Adding your own widget / sensor
+## Adding your own metric / endpoint
 
 1. Read [CLAUDE.md](CLAUDE.md) §2 (style) and §7 (research-before-coding).
-2. Add the new sensor's component to [main/idf_component.yml](main/idf_component.yml), run `idf.py reconfigure` (or just `Ctrl+E B`).
-3. Open the component's `.h` in `managed_components/<vendor>__<name>/include/` and confirm the real function signatures — do **not** copy from memory or from another project.
-4. Create the init / polling code in a new module under `main/` (e.g. `main/mysensor.c`); follow the file pattern of [sensors.c](main/sensors.c).
-5. Add a tab in [ui.c](main/ui.c) — every LVGL call from outside the LVGL task **must** be wrapped in `bsp_display_lock` / `bsp_display_unlock` (the `UI_WITH_LOCK` macro does this).
-6. Append a dated section to [ToDo.md](ToDo.md), then check items off as you go.
-7. When the work is done, distill any new gotcha into [LearnedPatterns.md](LearnedPatterns.md).
+2. If the metric comes from a new Beszel field, look at the **raw JSON dump** that prints once on first boot (`I beszel: raw systems response (...)`). It shows exactly what keys Beszel is sending for your host.
+3. Add the new key to `cpu_keys[]` / `mem_keys[]` / `gpu_keys[]` (or create a new key list) in [parse_one_system in main/beszel.c](main/beszel.c).
+4. Extend [`ui_beszel_host_t` in main/ui.h](main/ui.h) and the per-tab widgets in [build_host_tab in main/ui.c](main/ui.c) (every LVGL call from outside the LVGL task **must** be wrapped in `bsp_display_lock` / `bsp_display_unlock` — the `UI_WITH_LOCK` macro handles this).
+5. Append a dated section to [ToDo.md](ToDo.md), then check items off as you go.
+6. When the work is done, distill any new gotcha into [LearnedPatterns.md](LearnedPatterns.md).
 
 ---
 
 ## License
 
-See per-component licenses under `managed_components/`. Application source under `main/` is unencumbered — use as a reference for your own BOX-3 projects.
+See per-component licenses under `managed_components/`. Application source under `main/` and `sensor_example/` is unencumbered — use as a reference for your own BOX-3 projects.

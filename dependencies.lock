@@ -27,6 +27,16 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 4.1.6
+  espressif/cjson:
+    component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.19~2
   espressif/cmake_utilities:
     component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
@@ -182,7 +192,7 @@ dependencies:
       require: public
       version: ^0.1.4
     source:
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       type: service
     version: 2.1.0
   espressif/sensor_hub:
@@ -215,9 +225,9 @@ dependencies:
       type: service
     version: 9.4.0
 direct_dependencies:
+- espressif/cjson
 - espressif/esp-box-3
-- espressif/icm42670
 - idf
-manifest_hash: dc9f0952d429bf8d7f53cafe79d1c6d6d50c8af632c9e656e04823a64e379fac
+manifest_hash: e7d13ec1df69038310767b3548cf4e41e7402102266614690016b767457cd0a0
 target: esp32s3
 version: 3.0.0

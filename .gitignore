@@ -1,6 +1,11 @@
 # ESP-IDF build output
 build/
 
+# Local Kconfig output — regenerated from sdkconfig.defaults + menuconfig.
+# Kept off git so per-machine secrets (WiFi, Beszel credentials) never leak.
+sdkconfig
+sdkconfig.old
+
 # External tools / binaries kept in workspace
 *.exe
 
