@@ -5,6 +5,7 @@ idf_component_register(
         "buttons_check.c"
         "network.c"
         "beszel.c"
+        "claude_usage.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash

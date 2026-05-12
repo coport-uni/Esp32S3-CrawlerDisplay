@@ -204,6 +204,18 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
   - `Ctrl+Shift+P` → `ESP-IDF: …` — full command palette
 - **Rule**: Prefer the VS Code extension chord shortcuts over a separate `idf.py` shell for routine build/flash/monitor. Drop to a terminal only for commands the extension does not surface (e.g. `idf.py fullclean`). (from ToDo: 2026-05-11 ToDo/LP repo-local 전환 + 환경 LP 추가)
 
+### 5.9 Windows Firewall silently blocks LAN connections to Python `http.server` from ESP
+
+- **Problem**: ESP HTTP polling failed with `server unreachable` even though `curl http://<PC-IP>:<port>/...` from the same network returned the file fine. The Python `http.server` process was alive and listening on `0.0.0.0`.
+- **Cause**: Windows Defender Firewall blocks inbound connections to user-launched listeners by default — but only for hosts on a *different* IP than the loopback / local interface. `curl` from the **same PC** that runs the server hits the loopback path and bypasses the firewall, so local `curl http://<own-LAN-IP>:port/...` falsely "proves" the server works. The ESP, coming from a different LAN IP, hits the firewall and the SYN is dropped silently — ESP sees a connect timeout / refused.
+- **Fix**: Allow inbound traffic on the chosen TCP port (e.g. 8765) for the Private profile:
+   ```powershell
+   New-NetFirewallRule -DisplayName "ClaudeUsage CSV server" -Direction Inbound `
+       -Protocol TCP -LocalPort 8765 -Action Allow -Profile Private
+   ```
+   Or accept the Windows Firewall popup if it appears when Python first binds the port. Verify from a **second** machine: `curl http://<PC-IP>:8765/ClaudeUsage.csv` must work — not from the host running the server.
+- **Rule**: When testing PC-side HTTP services for ESP consumption, never trust `curl` from the same PC running the server — it tests the loopback path only. Always test from a separate host (or the ESP itself) before debugging the ESP HTTP client. If "server works locally but ESP fails", suspect the firewall first. (from ToDo: 2026-05-12 Claude 사용량 탭 추가)
+
 ---
 
 ## §99. Uncategorized

@@ -60,7 +60,6 @@ static int64_t  s_token_expires_us;
 static SemaphoreHandle_t s_mtx;
 static beszel_system_t   s_systems[CONFIG_BESZEL_MAX_HOSTS];
 static int               s_systems_count;
-static int               s_selected_idx;
 static int64_t           s_last_ok_us;
 
 static bool s_logged_raw_systems;
@@ -299,11 +298,9 @@ static void publish_all_to_ui(void)
     ui_beszel_host_t local_hosts[CONFIG_BESZEL_MAX_HOSTS];
     char name_buf[CONFIG_BESZEL_MAX_HOSTS][HOST_NAME_MAX_LEN];
     int  count;
-    int  active_idx;
 
     xSemaphoreTake(s_mtx, portMAX_DELAY);
     count = s_systems_count;
-    active_idx = (count > 0) ? (s_selected_idx % count) : 0;
     for (int i = 0; i < count; i++) {
         strncpy(name_buf[i], s_systems[i].name, sizeof(name_buf[i]) - 1);
         name_buf[i][sizeof(name_buf[i]) - 1] = '\0';
@@ -323,7 +320,10 @@ static void publish_all_to_ui(void)
         ui_beszel_set_unavailable("no hosts");
         return;
     }
-    ui_beszel_replace_hosts(local_hosts, count, active_idx);
+    /* active_idx = -1 → ui keeps whichever tab the user currently has
+     * selected. Tab navigation is owned by the physical buttons
+     * (ui_select_prev_tab / ui_select_next_tab), not by this poller. */
+    ui_beszel_replace_hosts(local_hosts, count, -1);
 }
 
 static void log_raw_systems(const char *buf, size_t len)
@@ -411,9 +411,6 @@ static esp_err_t fetch_systems_once(int *out_status)
     xSemaphoreTake(s_mtx, portMAX_DELAY);
     memcpy(s_systems, tmp, sizeof(beszel_system_t) * n);
     s_systems_count = n;
-    if (s_selected_idx >= n) {
-        s_selected_idx = 0;
-    }
     s_last_ok_us = esp_timer_get_time();
     xSemaphoreGive(s_mtx);
 
@@ -518,33 +515,4 @@ esp_err_t beszel_init(void)
     BaseType_t ok = xTaskCreatePinnedToCore(
         beszel_task, "beszel", 6144, NULL, 4, NULL, 0);
     return ok == pdPASS ? ESP_OK : ESP_FAIL;
-}
-
-void beszel_select_prev(void)
-{
-    int idx = -1;
-    xSemaphoreTake(s_mtx, portMAX_DELAY);
-    if (s_systems_count > 1) {
-        s_selected_idx = (s_selected_idx + s_systems_count - 1)
-                       % s_systems_count;
-        idx = s_selected_idx;
-    }
-    xSemaphoreGive(s_mtx);
-    if (idx >= 0) {
-        ui_beszel_select_tab(idx);
-    }
-}
-
-void beszel_select_next(void)
-{
-    int idx = -1;
-    xSemaphoreTake(s_mtx, portMAX_DELAY);
-    if (s_systems_count > 1) {
-        s_selected_idx = (s_selected_idx + 1) % s_systems_count;
-        idx = s_selected_idx;
-    }
-    xSemaphoreGive(s_mtx);
-    if (idx >= 0) {
-        ui_beszel_select_tab(idx);
-    }
 }

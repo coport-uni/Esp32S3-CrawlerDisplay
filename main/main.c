@@ -8,17 +8,18 @@
 #include "buttons_check.h"
 #include "network.h"
 #include "beszel.h"
+#include "claude_usage.h"
 
 static const char *TAG = "main";
 
 static void on_config_pressed(void)
 {
-    beszel_select_prev();
+    ui_select_prev_tab();
 }
 
 static void on_mute_pressed(void)
 {
-    beszel_select_next();
+    ui_select_next_tab();
 }
 
 void app_main(void)
@@ -41,6 +42,7 @@ void app_main(void)
 
     network_init();
     beszel_init();
+    claude_usage_init();
 
     ESP_LOGI(TAG, "init complete");
 }

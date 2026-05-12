@@ -12,7 +12,9 @@
 static const char *TAG = "ui";
 
 #define HOST_NAME_MAX_LEN        32
-#define UI_LOCK_MS      50
+#define UI_LOCK_MS               50
+#define CLAUDE_TS_CAP            24
+#define CLAUDE_MSG_CAP           40
 
 #define COLOR_ACCENT    lv_color_hex(0x00E5FF)
 #define COLOR_OK        lv_color_hex(0x06D6A0)
@@ -38,10 +40,32 @@ typedef struct {
     char      host_name[HOST_NAME_MAX_LEN];
 } host_ui_t;
 
+typedef struct {
+    lv_obj_t *tab_content;
+    lv_obj_t *lbl_timestamp;
+    lv_obj_t *bar_session;
+    lv_obj_t *lbl_session_val;
+    lv_obj_t *bar_week;
+    lv_obj_t *lbl_week_val;
+    lv_obj_t *lbl_reset;
+} claude_ui_t;
+
 static lv_obj_t   *s_tabview;
 static lv_obj_t   *s_lbl_status;
 static host_ui_t   s_host_ui[CONFIG_BESZEL_MAX_HOSTS];
 static int         s_host_ui_count;
+
+static claude_ui_t s_claude_ui;
+/* Claude data cached so that a tabview rebuild can re-render it without
+ * waiting for the next poll. */
+static bool        s_claude_have_data;
+static bool        s_claude_show_placeholder;
+static int         s_claude_session_pct;
+static int         s_claude_week_pct;
+static int         s_claude_reset_h;
+static int         s_claude_reset_m;
+static char        s_claude_ts[CLAUDE_TS_CAP];
+static char        s_claude_msg[CLAUDE_MSG_CAP];
 
 #define UI_WITH_LOCK(BLOCK)                          \
     do {                                             \
@@ -187,6 +211,112 @@ static void apply_host_data(host_ui_t *ui, const ui_beszel_host_t *h)
     lv_label_set_text_fmt(ui->lbl_disk_val, "%d%%", disk);
 }
 
+/* ---------------------- Claude tab build ---------------------- */
+
+static void build_claude_tab(lv_obj_t *tab, claude_ui_t *ui)
+{
+    memset(ui, 0, sizeof(*ui));
+    ui->tab_content = tab;
+
+    /* Top: muted "Updated YYYY-MM-DD HH:MM" timestamp. */
+    ui->lbl_timestamp = lv_label_create(tab);
+    lv_label_set_text(ui->lbl_timestamp, "waiting for CSV...");
+    lv_obj_set_style_text_color(ui->lbl_timestamp, COLOR_MUTED, 0);
+    lv_obj_align(ui->lbl_timestamp, LV_ALIGN_TOP_LEFT, 0, 0);
+
+    /* SESSION row: label + bar + percent. Label is wider than the host
+     * labels ("CPU"/"MEM") so the bar starts further right. */
+    lv_obj_t *lbl_s = lv_label_create(tab);
+    lv_label_set_text(lbl_s, "SESSION");
+    lv_obj_set_style_text_color(lbl_s, COLOR_MUTED, 0);
+    lv_obj_align(lbl_s, LV_ALIGN_TOP_LEFT, 0, 30);
+
+    ui->bar_session = lv_bar_create(tab);
+    lv_obj_set_size(ui->bar_session, 170, 14);
+    lv_obj_align(ui->bar_session, LV_ALIGN_TOP_LEFT, 70, 32);
+    lv_bar_set_range(ui->bar_session, 0, 100);
+    lv_obj_set_style_bg_color(ui->bar_session, COLOR_BAR_BG, 0);
+    lv_obj_set_style_bg_color(ui->bar_session, COLOR_ACCENT,
+                              LV_PART_INDICATOR);
+
+    ui->lbl_session_val = lv_label_create(tab);
+    lv_label_set_text(ui->lbl_session_val, "--");
+    lv_obj_set_style_text_color(ui->lbl_session_val, lv_color_black(), 0);
+    lv_obj_align(ui->lbl_session_val, LV_ALIGN_TOP_LEFT, 246, 30);
+
+    /* WEEK row. */
+    lv_obj_t *lbl_w = lv_label_create(tab);
+    lv_label_set_text(lbl_w, "WEEK");
+    lv_obj_set_style_text_color(lbl_w, COLOR_MUTED, 0);
+    lv_obj_align(lbl_w, LV_ALIGN_TOP_LEFT, 0, 60);
+
+    ui->bar_week = lv_bar_create(tab);
+    lv_obj_set_size(ui->bar_week, 170, 14);
+    lv_obj_align(ui->bar_week, LV_ALIGN_TOP_LEFT, 70, 62);
+    lv_bar_set_range(ui->bar_week, 0, 100);
+    lv_obj_set_style_bg_color(ui->bar_week, COLOR_BAR_BG, 0);
+    lv_obj_set_style_bg_color(ui->bar_week, COLOR_ACCENT,
+                              LV_PART_INDICATOR);
+
+    ui->lbl_week_val = lv_label_create(tab);
+    lv_label_set_text(ui->lbl_week_val, "--");
+    lv_obj_set_style_text_color(ui->lbl_week_val, lv_color_black(), 0);
+    lv_obj_align(ui->lbl_week_val, LV_ALIGN_TOP_LEFT, 246, 60);
+
+    /* Reset-in row: prominent accent text, centered. */
+    ui->lbl_reset = lv_label_create(tab);
+    lv_label_set_text(ui->lbl_reset, "Reset in --");
+    lv_obj_set_style_text_color(ui->lbl_reset, COLOR_ACCENT, 0);
+    lv_obj_set_style_text_align(ui->lbl_reset, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_width(ui->lbl_reset, 300);
+    lv_obj_align(ui->lbl_reset, LV_ALIGN_TOP_LEFT, 10, 110);
+}
+
+static void apply_claude_data_widgets(claude_ui_t *ui)
+{
+    int s = clamp_pct(s_claude_session_pct);
+    int w = clamp_pct(s_claude_week_pct);
+
+    if (s_claude_show_placeholder) {
+        lv_label_set_text(ui->lbl_timestamp,
+                          s_claude_msg[0] ? s_claude_msg : "unavailable");
+        lv_obj_set_style_bg_color(ui->bar_session, COLOR_MUTED,
+                                  LV_PART_INDICATOR);
+        lv_bar_set_value(ui->bar_session, 0, LV_ANIM_OFF);
+        lv_label_set_text(ui->lbl_session_val, "--");
+
+        lv_obj_set_style_bg_color(ui->bar_week, COLOR_MUTED,
+                                  LV_PART_INDICATOR);
+        lv_bar_set_value(ui->bar_week, 0, LV_ANIM_OFF);
+        lv_label_set_text(ui->lbl_week_val, "--");
+
+        lv_obj_set_style_text_color(ui->lbl_reset, COLOR_MUTED, 0);
+        lv_label_set_text(ui->lbl_reset, "Reset in --");
+        return;
+    }
+
+    if (s_claude_have_data) {
+        lv_label_set_text_fmt(ui->lbl_timestamp, "Updated %s", s_claude_ts);
+
+        lv_obj_set_style_bg_color(ui->bar_session, bar_color_for_pct(s),
+                                  LV_PART_INDICATOR);
+        lv_bar_set_value(ui->bar_session, s, LV_ANIM_OFF);
+        lv_label_set_text_fmt(ui->lbl_session_val, "%d%%", s);
+
+        lv_obj_set_style_bg_color(ui->bar_week, bar_color_for_pct(w),
+                                  LV_PART_INDICATOR);
+        lv_bar_set_value(ui->bar_week, w, LV_ANIM_OFF);
+        lv_label_set_text_fmt(ui->lbl_week_val, "%d%%", w);
+
+        lv_obj_set_style_text_color(ui->lbl_reset, COLOR_ACCENT, 0);
+        lv_label_set_text_fmt(ui->lbl_reset, "Reset in %dh %02dm",
+                              s_claude_reset_h, s_claude_reset_m);
+    } else {
+        lv_label_set_text(ui->lbl_timestamp, "waiting for CSV...");
+        lv_label_set_text(ui->lbl_reset, "Reset in --");
+    }
+}
+
 /* ---------------------- tabview lifecycle ---------------------- */
 
 static bool topology_changed(const ui_beszel_host_t *hosts, int count)
@@ -213,6 +343,15 @@ static void create_empty_tabview(void)
     lv_tabview_set_tab_bar_size(s_tabview, 30);
 }
 
+/* Append the always-present Claude tab and re-render whatever Claude
+ * state we have cached. Used by rebuild_tabview and ui_create. */
+static void append_claude_tab(void)
+{
+    lv_obj_t *claude_tab = lv_tabview_add_tab(s_tabview, "Claude");
+    build_claude_tab(claude_tab, &s_claude_ui);
+    apply_claude_data_widgets(&s_claude_ui);
+}
+
 static void rebuild_tabview(const ui_beszel_host_t *hosts, int count)
 {
     if (s_tabview) {
@@ -221,6 +360,7 @@ static void rebuild_tabview(const ui_beszel_host_t *hosts, int count)
     }
     memset(s_host_ui, 0, sizeof(s_host_ui));
     s_host_ui_count = 0;
+    memset(&s_claude_ui, 0, sizeof(s_claude_ui));
 
     create_empty_tabview();
 
@@ -237,6 +377,8 @@ static void rebuild_tabview(const ui_beszel_host_t *hosts, int count)
     }
     s_host_ui_count = n;
 
+    append_claude_tab();
+
     /* Pull the status footer back above the tabview so it stays clickable
      * (lv_obj_delete + create reset z-order). */
     if (s_lbl_status) {
@@ -252,6 +394,7 @@ void ui_create(void)
     lv_obj_set_style_bg_color(scr, COLOR_BG, 0);
 
     create_empty_tabview();
+    append_claude_tab();
 
     s_lbl_status = lv_label_create(scr);
     lv_label_set_text(s_lbl_status, "starting...");
@@ -280,29 +423,86 @@ void ui_beszel_replace_hosts(const ui_beszel_host_t *hosts, int count,
         for (int i = 0; i < n; i++) {
             apply_host_data(&s_host_ui[i], &hosts[i]);
         }
-        if (n > 0 && s_tabview) {
-            int idx = active_idx;
-            if (idx < 0) {
-                idx = 0;
-            } else if (idx >= n) {
-                idx = n - 1;
+        /* active_idx >= 0 forces a tab change; -1 means "leave whichever
+         * tab the user is on alone". */
+        if (active_idx >= 0 && s_tabview) {
+            uint32_t total = lv_tabview_get_tab_count(s_tabview);
+            if (total > 0) {
+                uint32_t idx = (uint32_t)active_idx;
+                if (idx >= total) {
+                    idx = total - 1;
+                }
+                lv_tabview_set_active(s_tabview, idx, LV_ANIM_OFF);
             }
-            lv_tabview_set_active(s_tabview, idx, LV_ANIM_OFF);
         }
     });
 }
 
-void ui_beszel_select_tab(int idx)
+void ui_claude_set_data(const ui_claude_data_t *data)
+{
+    if (!data) {
+        return;
+    }
+    UI_WITH_LOCK({
+        s_claude_have_data = data->valid;
+        s_claude_show_placeholder = false;
+        s_claude_session_pct = data->session_pct;
+        s_claude_week_pct = data->week_all_pct;
+        s_claude_reset_h = data->reset_h;
+        s_claude_reset_m = data->reset_m;
+        if (data->timestamp) {
+            strncpy(s_claude_ts, data->timestamp, sizeof(s_claude_ts) - 1);
+            s_claude_ts[sizeof(s_claude_ts) - 1] = '\0';
+        } else {
+            s_claude_ts[0] = '\0';
+        }
+        s_claude_msg[0] = '\0';
+        if (s_claude_ui.lbl_reset) {
+            apply_claude_data_widgets(&s_claude_ui);
+        }
+    });
+}
+
+void ui_claude_set_unavailable(const char *reason)
 {
     UI_WITH_LOCK({
-        if (s_tabview && s_host_ui_count > 0) {
-            int i = idx;
-            if (i < 0) {
-                i = 0;
-            } else if (i >= s_host_ui_count) {
-                i = s_host_ui_count - 1;
+        s_claude_show_placeholder = true;
+        if (reason) {
+            strncpy(s_claude_msg, reason, sizeof(s_claude_msg) - 1);
+            s_claude_msg[sizeof(s_claude_msg) - 1] = '\0';
+        } else {
+            s_claude_msg[0] = '\0';
+        }
+        if (s_claude_ui.lbl_reset) {
+            apply_claude_data_widgets(&s_claude_ui);
+        }
+    });
+}
+
+void ui_select_prev_tab(void)
+{
+    UI_WITH_LOCK({
+        if (s_tabview) {
+            uint32_t cnt = lv_tabview_get_tab_count(s_tabview);
+            if (cnt > 0) {
+                uint32_t cur = lv_tabview_get_tab_active(s_tabview);
+                uint32_t nxt = (cur + cnt - 1) % cnt;
+                lv_tabview_set_active(s_tabview, nxt, LV_ANIM_OFF);
             }
-            lv_tabview_set_active(s_tabview, i, LV_ANIM_OFF);
+        }
+    });
+}
+
+void ui_select_next_tab(void)
+{
+    UI_WITH_LOCK({
+        if (s_tabview) {
+            uint32_t cnt = lv_tabview_get_tab_count(s_tabview);
+            if (cnt > 0) {
+                uint32_t cur = lv_tabview_get_tab_active(s_tabview);
+                uint32_t nxt = (cur + 1) % cnt;
+                lv_tabview_set_active(s_tabview, nxt, LV_ANIM_OFF);
+            }
         }
     });
 }
@@ -326,7 +526,9 @@ void ui_beszel_set_unavailable(const char *reason)
             s_tabview = NULL;
             memset(s_host_ui, 0, sizeof(s_host_ui));
             s_host_ui_count = 0;
+            memset(&s_claude_ui, 0, sizeof(s_claude_ui));
             create_empty_tabview();
+            append_claude_tab();
             if (s_lbl_status) {
                 lv_obj_move_foreground(s_lbl_status);
             }

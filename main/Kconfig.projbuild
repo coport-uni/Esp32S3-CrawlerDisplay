@@ -48,3 +48,24 @@ config BESZEL_MAX_HOSTS
         Upper bound on number of hosts kept in the on-device cache.
 
 endmenu
+
+menu "Claude usage tab"
+
+config CLAUDE_USAGE_SERVER_URL
+    string "Claude usage CSV URL"
+    default "http://192.168.1.16:8765/ClaudeUsage.csv"
+    help
+        Full URL of the ClaudeUsage.csv file served by the host PC.
+        See container/Espress_dev/claude_usage_server.py for the
+        companion Python HTTP server that exposes the CSV on this
+        URL.
+
+config CLAUDE_USAGE_POLL_INTERVAL_S
+    int "Poll interval (seconds)"
+    default 30
+    range 5 600
+    help
+        How often to GET the CSV. Claude usage changes slowly so
+        30s is plenty; lowering it just adds traffic to the host PC.
+
+endmenu

@@ -22,13 +22,6 @@ extern "C" {
  */
 esp_err_t beszel_init(void);
 
-/* Advance / retreat the on-screen host selection. Both are safe to call
- * from button callbacks; they take an internal mutex and immediately
- * republish to the UI so the user sees the new host without waiting for
- * the next poll cycle. */
-void      beszel_select_prev(void);
-void      beszel_select_next(void);
-
 #ifdef __cplusplus
 }
 #endif
