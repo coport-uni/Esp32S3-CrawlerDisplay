@@ -1,0 +1,50 @@
+menu "Beszel monitor"
+
+config BESZEL_WIFI_SSID
+    string "WiFi SSID"
+    default ""
+    help
+        WPA2-Personal SSID. Leave empty to skip WiFi bring-up; the
+        Beszel tab will show a "configure WiFi" message.
+
+config BESZEL_WIFI_PASSWORD
+    string "WiFi password"
+    default ""
+    help
+        WPA2-Personal passphrase. Stored in the local sdkconfig only.
+
+config BESZEL_SERVER_URL
+    string "Beszel base URL"
+    default "http://10.16.21.197:8090"
+    help
+        Base URL of the Beszel/PocketBase server. Include scheme and
+        port. Trailing slash optional.
+
+config BESZEL_USER
+    string "Beszel identity"
+    default ""
+    help
+        Beszel user identity (typically the email address). Used in
+        POST /api/collections/users/auth-with-password.
+
+config BESZEL_PASSWORD
+    string "Beszel password"
+    default ""
+    help
+        Beszel user password. Stored in the local sdkconfig only.
+
+config BESZEL_POLL_INTERVAL_S
+    int "Poll interval (seconds)"
+    default 5
+    range 2 60
+    help
+        How often to poll /api/collections/systems/records.
+
+config BESZEL_MAX_HOSTS
+    int "Max hosts cached"
+    default 16
+    range 1 50
+    help
+        Upper bound on number of hosts kept in the on-device cache.
+
+endmenu
