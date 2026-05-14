@@ -214,5 +214,5 @@ source: https://github.com/coport-uni/CommonClaude (README.md + CLAUDE.md)
 - [x] `idf.py build` 영향 없음 확인 — CLAUDE.md만 수정, 빌드 훅 트리거 패턴(`main/**`, `CMakeLists.txt`, `sdkconfig.defaults`, `idf_component.yml`)에 해당 없음
 - [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/6
 - [x] Issue #1 (BOX-3 self-test bring-up) close — Beszel 피벗으로 사실상 완료, 본문에 4건 fix 정리 완료 상태로 close
-- [ ] 커밋 + push
+- [x] 커밋 + push: `fee1a55 Adopt CommonClaude task-management and IDE reference docs in CLAUDE.md` (Closes #6)
 
