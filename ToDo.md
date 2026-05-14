@@ -189,5 +189,30 @@ PC 측 `claude_usage_server.py`(워크스페이스 경로의 CSV를 read-only로
 - [ ] 실기기 화면: Claude 탭 표시 + CONFIG/MUTE로 [host0 → host1 → Claude → host0] 순환 확인.
 - [ ] PC에서 `python claude_usage_server.py` 실행 → curl로 응답 확인 → CSV 수동 수정 후 30초 이내 화면 반영 확인.
 - [x] LearnedPatterns.md §5.9 Windows Firewall 함정 기록 (PC↔ESP HTTP).
-- [x] GitHub Issue 생성: https://github.com/coport-uni/Esp32S3-CrawlerDisplay/issues/5
-- [ ] 커밋 + push.
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/5 (repo rename 후 자동 redirect)
+- [x] README.md에 실기기 사진 2장(Beszel 호스트 / Claude 탭) 임베드 + Claude 사용량 설정 섹션 + Windows Firewall 안내 추가.
+- [x] `gh repo rename`으로 GitHub 레포 이름을 `Esp32S3-CrawlerDisplay` → `ESP32S3WebMonitor`로 변경, 로컬 origin URL도 동기화.
+- [x] 커밋 + push: `bb3eb0b Add Claude usage CSV tab + host-side HTTP server`.
+
+## 2026-05-14 | CLAUDE.md에 CommonClaude README 비-Python 잔여 항목 반영
+
+source: https://github.com/coport-uni/CommonClaude (README.md + CLAUDE.md)
+
+현재 프로젝트 `CLAUDE.md`의 §1~§10 CommonClaude Conventions 본문은 이미 C/ESP-IDF에 맞게 적응됨 (MIT → Google C, Ruff → idf.py build). README/CLAUDE.md에서 비-Python인데 누락된 보조 항목들만 추가한다.
+
+사용자 결정:
+- 부록 위치: CommonClaude 섹션 뒤에 §11+로 이어붙임
+- §4 처리: 소스의 MANDATORY 인용구 + 7단계 워크플로우 그대로 채택
+
+### 작업 항목
+
+- [x] §4 Task Management: 6단계 → 7단계로 재작성, "MANDATORY ... every task without exception" 인용구 + "non-negotiable" reminder 추가 (CLAUDE.md §4)
+- [x] §11 `ultrathink` 사용 규칙 신설 (plan mode/복잡 작업 시 명령 끝에 부착) (CLAUDE.md §11)
+- [x] §12 Claude Code IDE Commands 표 (`/clear`, `/rewind`, `/memory`, `/permission`, `/review`, `/output-style`) (CLAUDE.md §12)
+- [x] §13 Claude Code VS Code Shortcuts 표 (`Shift+Tab`, `Ctrl+Shift+E`, `Ctrl+Shift+X`, `Alt+K`) (CLAUDE.md §13)
+- [x] §14 References (소스 README의 책/링크 출처) (CLAUDE.md §14)
+- [x] `idf.py build` 영향 없음 확인 — CLAUDE.md만 수정, 빌드 훅 트리거 패턴(`main/**`, `CMakeLists.txt`, `sdkconfig.defaults`, `idf_component.yml`)에 해당 없음
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/6
+- [x] Issue #1 (BOX-3 self-test bring-up) close — Beszel 피벗으로 사실상 완료, 본문에 4건 fix 정리 완료 상태로 close
+- [ ] 커밋 + push
+

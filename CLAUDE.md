@@ -168,34 +168,48 @@ Debug, exploratory, and throwaway scratch files go in `claude_test/`, **not** mi
 
 ## 4. Task Management
 
-**Mandatory** workflow for every task, regardless of size:
+> **MANDATORY**: This workflow applies to **every task without exception**, regardless of size or complexity. No task may begin without writing `ToDo.md` and, when a remote repo exists, creating a GitHub issue via `gh`. Skipping any step is not allowed.
 
-1. **Validate the command** before doing anything else (see "Command Input Validation" below).
-2. **Write or append to `ToDo.md`** at the project repo root (`Espress_dev/ToDo.md`, alongside this `CLAUDE.md`) in this format:
+### Rules
+
+1. **Write `ToDo.md`**: For every task requested by the user, append a new entry to `ToDo.md` at the project repo root (`Espress_dev/ToDo.md`, alongside this `CLAUDE.md`) and confirm the contents with the user before starting work.
+2. **Accumulate `ToDo.md`**: Do not overwrite or rewrite previous entries. Always **append** new tasks below existing ones so the file serves as a cumulative command history.
+3. **Register GitHub issues**: When a remote repo is configured, use the `gh` CLI to register the ToDo list and details as a GitHub issue. Skip silently if `gh` is unavailable or no remote is configured.
+
+### Command Input Validation
+
+Before writing `ToDo.md`, the following two checks must both pass:
+
+1. **Is the command explicit?** If the request is ambiguous or open to interpretation, do not start work. Instead, ask the user for specifics:
+   - *What* is being changed? (target)
+   - *How* is it being changed? (method)
+   - *Why* is it being changed? (purpose)
+2. **Are reference materials available?** Check whether related datasheets, PDFs, prior code, or vendor docs exist. If so, review them before incorporating them into the work.
+
+> Do not proceed if either check is not satisfied.
+
+### Workflow
+
+1. Receive the user's task request and **validate the command input**.
+2. Once validated, append the task list to `ToDo.md` in this format:
    ```markdown
    ## YYYY-MM-DD | Task title
 
    - [ ] subtask 1
    - [ ] subtask 2
    ```
-   Never delete or rewrite previous entries — `ToDo.md` is append-only history.
-3. **Get user confirmation** on the `ToDo.md` contents before starting work.
-4. **Create a GitHub issue** via `gh issue create` when a remote repo exists. (Skip silently if `gh` is unavailable or no remote is configured.)
-5. **Check items off** (`- [ ]` → `- [x]`) as work completes; append a one-line summary or output path after the checkbox.
-6. **Commit and push** after each user command completes (only when working in a git repo).
+3. Get the user's confirmation on the `ToDo.md` contents.
+4. Once confirmed, create a GitHub issue via `gh issue create` (when a remote is configured).
+5. Check off completed items in `ToDo.md` as work progresses (`- [ ]` → `- [x]`); append a one-line summary or output path after the checkbox.
+6. Update the GitHub issue via `gh issue edit` (or `gh issue close`) as items are completed.
+7. **Commit and push** changes after every user command completes (only when working in a git repo).
 
-### Command Input Validation
-
-Before writing `ToDo.md`, confirm both:
-- **Is the command explicit?** If ambiguous, ask: *what* changes (target), *how* (method), *why* (purpose).
-- **Are reference materials available?** Check for related datasheets, PDFs, prior code, or vendor docs and review them first.
-
-If either check fails, stop and ask the user.
+> **Reminder**: Steps 2 (`ToDo.md`) and 4 (`gh issue create`) are **non-negotiable** whenever the prerequisites are met. Every task must have a corresponding `ToDo.md` entry, and a GitHub issue if a remote is configured, before substantive work begins.
 
 ### Append-only exceptions
 
 The append-only rule does **not** forbid:
-- Flipping `- [ ]` to `- [x]` and appending an output path or commit hash.
+- Flipping `- [ ]` to `- [x]` and appending an output path, commit hash, or issue link.
 - Adding a new dated section at the bottom.
 
 It does forbid: rewriting past task bodies, reordering items, deleting old sections.
@@ -301,3 +315,51 @@ If `LearnedPatterns.md` does not exist, generate it by analyzing completed (`[x]
 - **Create `LearnedPatterns.md` as a new file** at the project repo root (alongside this `CLAUDE.md`).
 - **Do not invent patterns.** When a ToDo item is ambiguous, place it under §99 rather than guessing.
 - **Write all content in English**, consistent with §2 Language.
+
+---
+
+## 11. Using `ultrathink`
+
+When operating in **plan mode** or tackling a **complex task** (cross-module refactors, root-cause analysis of subtle bugs, multi-step hardware bring-up, pattern extraction across `ToDo.md`/`LearnedPatterns.md`), append `ultrathink` to the end of the request. This signals Claude to engage extended reasoning for deeper analysis.
+
+```
+# Example
+Review this entire codebase ultrathink
+Diagnose why AHT30 events never fire even though register succeed appears in the log ultrathink
+```
+
+Do not attach `ultrathink` to trivial edits or single-file lookups — extended thinking is a tool for problems where a fast answer is likely to be wrong.
+
+---
+
+## 12. Claude Code IDE Commands
+
+| Command          | Description                                                                            |
+|------------------|----------------------------------------------------------------------------------------|
+| `/clear`         | Clears Claude's memory context.                                                        |
+| `/rewind`        | Re-executes the previous action.                                                       |
+| `/memory`        | Adds specific content to memory.                                                       |
+| `/permission`    | Configures permissions for Bash, Edit, Write, etc.                                     |
+| `/review`        | Checks the current session's context cost.                                             |
+| `/output-style`  | Switches the output style (Default, Explanatory, Learning) or applies a custom style.  |
+
+---
+
+## 13. Claude Code Shortcuts (VS Code)
+
+| Shortcut                | Description                          |
+|-------------------------|--------------------------------------|
+| `Shift` + `Tab`         | Toggles approval mode.               |
+| `Ctrl` + `Shift` + `E`  | Opens the Explorer panel.            |
+| `Ctrl` + `Shift` + `X`  | Opens the Extensions panel.          |
+| `Alt` + `K`             | Starts an inline editor reference.   |
+
+---
+
+## 14. References
+
+- Upstream conventions: [coport-uni/CommonClaude](https://github.com/coport-uni/CommonClaude)
+- Claude Code (VS Code): [code.claude.com/docs/en/vs-code](https://code.claude.com/docs/en/vs-code#extension-settings)
+- Claude Code Hooks: [code.claude.com/docs/en/hooks](https://code.claude.com/docs/en/hooks)
+- 클로드 코드를 활용한 바이브 코딩 완벽입문 — [kyobobook product page](https://product.kyobobook.co.kr/detail/S000219349783)
+- 한 걸음 앞선 개발자가 지금 꼭 알아야할 클로드 코드 — [kyobobook product page](https://product.kyobobook.co.kr/detail/S000217402731)
