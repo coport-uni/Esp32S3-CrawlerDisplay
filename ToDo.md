@@ -304,6 +304,79 @@ CLAUDE.md §2 위반:
 - [x] MED:  `main/buttons_check.h:14` — `buttons_check_init()`에 Doxygen 블록 추가
 - [x] MED:  `main/network.h:33` — `network_get_state()`에 Doxygen 블록 추가
 - [x] MED:  `main/network.h:34` — `network_is_connected()`에 Doxygen 블록 추가
-- [ ] `idf.py build` 워닝 0 확인 (LP §5.7 레시피로 백그라운드 실행 중)
+- [x] `idf.py build` 워닝 0 확인 — bin 0x13bbf0 bytes, 16% 여유. 사전 Kconfig 워닝(LV_MEM_CUSTOM/LV_MEMCPY_MEMSET_STD) 2건은 이번 편집과 무관
 - [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/8
 - [ ] 커밋 + push
+
+## 2026-05-21 | examples/ 폴더 ESP-IDF 공식 스타일(#1)로 재구성 (standalone 프로젝트화)
+
+목적: `examples/sensor_example/`, `examples/server_monitor_examples/` 두 폴더는 현재 component-level `CMakeLists.txt`만 있어 standalone 빌드 불가. ESP-IDF 공식 `esp-idf/examples/`, `esp-bsp/examples/` 패턴(각 example = 독립 ESP-IDF 프로젝트)으로 재구성해 폴더당 `idf.py build`/`flash`/`monitor` 직접 실행 가능하게 한다. 루트 `main/`(Beszel + Claude usage 활성 펌웨어)는 그대로 유지.
+
+### 사용자 결정
+
+- 폴더명: `server_monitor_examples/` → **`server_monitor/`** (ESP-IDF 공식 examples 단수형 컨벤션). `sensor_example/`은 이미 단수형이라 유지.
+- 루트 `main/` 처리: 그대로 두고 examples/ 두 개만 standalone화. README는 이미 Beszel을 메인으로, sensor_example을 진단용 스냅샷으로 설명함.
+- 공통 코드(`buttons_check.*`, `ui.*`) → 시그니처가 두 example 간 불일치(`buttons_check_init(void)` vs `buttons_check_init(const buttons_callbacks_t *)`). 무리하게 `components/`로 승격하지 않고 각 example 안에 격리 유지. (공통화는 진짜 같은 코드만 모이면 후속 작업으로 분리)
+
+### 변경 후 구조
+
+```
+Espress_dev/
+├── CMakeLists.txt              # 루트 = 메인 펌웨어 (변경 없음)
+├── main/                       # Beszel + Claude usage (변경 없음)
+├── sdkconfig.defaults
+├── examples/
+│   ├── sensor_example/
+│   │   ├── CMakeLists.txt              # 신규: project(sensor_example)
+│   │   ├── sdkconfig.defaults          # 신규: 루트 sdkconfig.defaults 복사
+│   │   └── main/
+│   │       ├── CMakeLists.txt          # idf_component_register (이동)
+│   │       ├── idf_component.yml       # (이동)
+│   │       ├── main.c                  # (이동)
+│   │       ├── ui.c/h
+│   │       ├── sensors.c/h
+│   │       ├── audio_check.c/h
+│   │       ├── ir_check.c/h
+│   │       └── buttons_check.c/h
+│   ├── server_monitor/                  # 폴더 rename
+│   │   ├── CMakeLists.txt              # 신규: project(server_monitor)
+│   │   ├── sdkconfig.defaults          # 신규: 루트 + Kconfig.projbuild 호환
+│   │   └── main/
+│   │       ├── CMakeLists.txt          # (이동)
+│   │       ├── idf_component.yml       # (이동)
+│   │       ├── Kconfig.projbuild       # (이동, BESZEL_* 메뉴)
+│   │       ├── main.c
+│   │       ├── ui.c/h
+│   │       ├── buttons_check.c/h
+│   │       ├── network.c/h
+│   │       └── beszel.c/h
+│   └── README.md                       # 신규: 두 example 비교/빌드법
+└── README.md                            # 기존, examples/ 섹션만 폴더 rename 반영
+```
+
+### 작업 항목
+
+- [ ] `git mv examples/server_monitor_examples examples/server_monitor` (히스토리 보존)
+- [ ] 각 example에서 `main.c`/`*.c`/`*.h`/`CMakeLists.txt`/`idf_component.yml`/`Kconfig.projbuild`를 폴더 안 `main/` 서브디렉토리로 `git mv`
+- [ ] `examples/sensor_example/CMakeLists.txt` 신규 — `cmake_minimum_required(VERSION 3.16)` + `include($ENV{IDF_PATH}/tools/cmake/project.cmake)` + `project(sensor_example)`
+- [ ] `examples/server_monitor/CMakeLists.txt` 신규 — 동일 패턴으로 `project(server_monitor)`
+- [ ] `examples/sensor_example/sdkconfig.defaults` — 루트 `sdkconfig.defaults` 복사 (BOX-3 동일 하드웨어)
+- [ ] `examples/server_monitor/sdkconfig.defaults` — 루트 복사 + `Kconfig.projbuild`의 BESZEL_* 키 호환 확인
+- [ ] `examples/README.md` 신규 — 두 example 목적/빌드 명령/관계 1쪽 요약
+- [ ] 루트 `README.md`의 `examples/` 언급 부분에서 `server_monitor_examples/` → `server_monitor/`로 갱신
+- [ ] `examples/sensor_example/`에서 `idf.py set-target esp32s3 && idf.py build` 워닝 0 통과 확인 (LP §5.7 레시피)
+- [ ] `examples/server_monitor/`에서 `idf.py set-target esp32s3 && idf.py build` 워닝 0 통과 확인
+- [ ] GitHub Issue 생성 (`gh issue create`)
+- [ ] 커밋 + push
+
+### 검증
+
+- 각 example 폴더에서 `idf.py build` 단독 통과
+- 루트 `idf.py build`는 여전히 메인 펌웨어(Beszel + Claude usage)를 빌드 — 회귀 없음
+- `git log --follow examples/sensor_example/main/main.c` 히스토리 끊김 없음 확인 (git mv 효과)
+
+### 위험/주의
+
+- `.claude/hooks/post-write-build-check.ps1`은 `main/**`만 모니터링 — examples/는 자동 빌드 안 됨. 수동 빌드로 검증.
+- `idf.py reconfigure` 캐시: 폴더 이동 후 각 example의 `build/`가 없을 테니 그냥 새로 빌드 → 충돌 없음.
+- root `main/`의 `buttons_check.*` / `ui.*` / `network.*` / `beszel.*` / `claude_usage.*`는 server_monitor example의 후속 버전 — examples/server_monitor/는 **스냅샷**으로 남기고 후속 작업은 root에서만 진행.

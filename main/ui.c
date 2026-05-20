@@ -79,8 +79,12 @@ static char        s_claude_msg[CLAUDE_MSG_CAP];
 
 static int clamp_pct(int v)
 {
-    if (v < 0)   return 0;
-    if (v > 100) return 100;
+    if (v < 0) {
+        return 0;
+    }
+    if (v > 100) {
+        return 100;
+    }
     return v;
 }
 

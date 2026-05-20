@@ -30,7 +30,26 @@ typedef enum {
  */
 esp_err_t       network_init(void);
 
+/**
+ * @brief  Return the current WiFi STA connection state.
+ *
+ * Safe to call from any task; reads a single word updated by the network
+ * task. Useful for status indicators that should distinguish idle,
+ * connecting, connected, and disconnected.
+ *
+ * @return One of the `NETWORK_STATE_*` enum values.
+ */
 network_state_t network_get_state(void);
+
+/**
+ * @brief  Convenience predicate: link is up and an IP has been acquired.
+ *
+ * Equivalent to `network_get_state() == NETWORK_STATE_CONNECTED`.
+ * Intended for gating one-shot HTTP requests where the caller does not
+ * care about the precise sub-state.
+ *
+ * @return true if connected, false otherwise.
+ */
 bool            network_is_connected(void);
 
 /**
