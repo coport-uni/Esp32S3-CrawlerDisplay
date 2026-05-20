@@ -216,3 +216,94 @@ source: https://github.com/coport-uni/CommonClaude (README.md + CLAUDE.md)
 - [x] Issue #1 (BOX-3 self-test bring-up) close — Beszel 피벗으로 사실상 완료, 본문에 4건 fix 정리 완료 상태로 close
 - [x] 커밋 + push: `fee1a55 Adopt CommonClaude task-management and IDE reference docs in CLAUDE.md` (Closes #6)
 
+## 2026-05-20 | CommonClaude `feat/c-language-support` 브랜치 반영 (Git 규칙 + MIT C 스타일)
+
+source: https://github.com/coport-uni/CommonClaude/tree/feat/c-language-support (CLAUDE.md size=19591, sha 7337e2e)
+
+사용자 결정:
+- 범위: Git 규칙 전체 (§11~§17 of branch) + **`.clang-format` 추가 채택** (사용자 후속 결정: "적용해줘").
+- §2 C 스타일 가이드: Google → MIT로 교체. ESP-IDF의 `snake_case_t` typedef 관례는 유지 (브랜치 표에도 `_t` 선택지 명시됨).
+- 신규 섹션은 기존 §11~§14 뒤에 §15~§21로 append (renumbering으로 인한 ToDo.md cross-ref 깨짐 방지). Git References는 새 §21로 분리.
+- `.clang-format` 빌드 충돌 방지: `managed_components/.clang-format`에 `DisableFormat: true` 가드 파일을 둬서 제3자 코드 자동 정렬 차단.
+
+### 작업 항목
+
+- [ ] `CLAUDE.md §2`: Google C++ Style Guide 기반 본문을 MIT CommLab 스타일로 교체 — 연속행 좌측 연산자, 시각적 정렬, `/* TODO */` 블록, 공개 함수 Doxygen 의무화 등. Naming 표는 ESP-IDF `snake_case_t` 유지
+- [ ] `CLAUDE.md §15` Commit Messages 신설 — Conventional Commits 표 + 규칙 + 예시 + Breaking Changes
+- [ ] `CLAUDE.md §16` Branching Strategy 신설 — GitHub Flow, `<type>/<short-description>` 네이밍, 표준 워크플로우
+- [ ] `CLAUDE.md §17` .gitignore Base Template 신설 — C 빌드 산출물 + 에디터/OS + secrets
+- [ ] `CLAUDE.md §18` Versioning 신설 — SemVer, Conventional Commits 매핑, `git tag -a` 태깅
+- [ ] `CLAUDE.md §19` Pull Request Guidelines 신설 — Conventional Commits 제목 + Changes/Why/Testing/Related Issues 템플릿 + 400줄 권장
+- [ ] `CLAUDE.md §20` Git Automation (Optional) 신설 — pre-commit + `.pre-commit-config.yaml` 예시
+- [x] `CLAUDE.md §21` Git Convention References 신설 — Conventional Commits / GitHub Flow / SemVer / pre-commit / clang-format / Pro Git 등 외부 링크
+- [x] `.clang-format` (project root) 생성 — LLVM 베이스, 80-col / 4-space / 연속행 좌측 연산자 (브랜치와 동일)
+- [~] `managed_components/.clang-format` 생성 — **변경**: pre-write 훅이 차단 + `idf.py reconfigure` 시 wipe 위험. 대신 §6/§20에 "도구 레벨 제외" 방식(manual glob 제한, pre-commit `exclude: ^managed_components/`, VS Code `[c]` scope) 문서화
+- [x] `CLAUDE.md §6 Build & Static Checks`에 `.clang-format` 사용법 + `managed_components/` 제외 방침 한 단락 추가
+- [x] `CLAUDE.md §2` MIT 스타일로 교체 — 연속행 좌측 연산자, 시각적 정렬, `/* TODO */`, 공개 함수 Doxygen 의무화
+- [x] `CLAUDE.md §15~§21` 신설 — Conventional Commits / GitHub Flow / .gitignore / SemVer / PR / pre-commit / Git References
+- [x] `idf.py build` 영향 없음 확인 — CLAUDE.md/.clang-format만 수정, 빌드 훅 트리거 패턴(`main/**`, `CMakeLists.txt`, `sdkconfig.defaults`, `idf_component.yml`) 미해당
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/7
+- [x] `.claude/branch_CLAUDE.md`, `.claude/branch_clang_format.txt` 임시 파일 삭제
+- [ ] 커밋 + push
+
+## 2026-05-20 | VSCode ESP-IDF 확장의 stale OpenOCD 시리얼 캐시 정리
+
+증상: VSCode 내장 `ESP-IDF: OpenOCD`(`Ctrl+E O`) 또는 JTAG flash 실행 시 항상 다음 두 줄로 실패 — `Info : No device matches the serial string` → `Error: esp_usb_jtag: could not find or open device!`. PowerShell에서 직접 `openocd -f board/esp32s3-builtin.cfg`를 띄우면 정상 동작. 즉 VSCode 확장만의 문제로 좁혀짐.
+
+원인 확정: workspaceStorage SQLite 메멘토에 옛 보드의 USB iSerial이 캐싱돼 있고 확장이 그걸 `adapter serial …`로 OpenOCD에 넘기고 있었음 — `%APPDATA%\Code\User\workspaceStorage\<hash>\state.vscdb`의 `ItemTable.espressif.esp-idf-extension` JSON 값 안 `openocd.usbAdapterSerial = "90:E5:B1:D6:50:D4"` (옛 보드). 현재 보드 MAC은 `90:E5:B1:D6:5A:48`이라 진짜로 시리얼 불일치. `settings.json`도 Settings UI도 노출 안 함 → 일반 검색으로는 발견 불가.
+
+- [x] Windows PnP enumeration으로 현재/유령 보드 MAC 식별 (`Get-PnpDevice ... VID_303A&PID_1001`) — 옛=`50:D4`, 현재=`5A:48`
+- [x] MI_02 인터페이스 드라이버 서비스 `WinUSB` 확인 (driver binding은 정상, Zadig 문제 아님 확정)
+- [x] PowerShell에서 OpenOCD 직접 실행 성공 (VSCode 확장만의 문제로 좁힘)
+- [x] workspaceStorage `state.vscdb` 조회로 캐시된 시리얼 위치 특정 (Python `sqlite3`)
+- [x] VSCode 종료 → DB 백업 → `openocd.usbAdapterSerial` 키 제거 → VSCode 재시작
+- [x] 실기기 확인: VSCode에서 OpenOCD 정상 동작 — 사용자 확인 ✅
+- [x] LearnedPatterns.md §5.10에 진단/픽스 영구 등록
+
+## 2026-05-21 | claude_usage_server.py 부팅 시 자동 실행 (Windows Task Scheduler)
+
+목적: PC 부팅(로그온) 시 `claude_usage_server.py`가 자동으로 떠 있어, ESP32가 항상 최신 `ClaudeUsage.csv`를 받을 수 있게 한다. 매번 수동으로 터미널을 띄울 필요 없음.
+
+사용자 결정:
+- 트리거: **로그온 시(At log on)**. 관리자 권한 불필요, 사용자 폴더 경로(ClaudeUsage.csv)에 안전하게 접근 가능.
+- 실행기: `pythonw.exe` — 콘솔 창 숨김.
+- 재시작 정책: 실패 시 1분 후 재시도, 최대 3회.
+
+### 기술 메모
+
+- 작업 이름: `ClaudeUsageServer`
+- 스크립트 경로: `C:\Users\USER_55_DeepLearning\Desktop\workspace\container\Espress_dev\claude_usage_server.py`
+- CSV 경로: 스크립트 기본값(`../../ClaudeUsage.csv` → `C:\Users\USER_55_DeepLearning\Desktop\workspace\ClaudeUsage.csv`) 그대로 사용
+- 포트: 8765 (Kconfig `CLAUDE_USAGE_SERVER_URL` 기본값과 일치, 변경 불필요)
+- `pythonw.exe` 위치: `(Get-Command pythonw).Source`로 동적 해결
+- 작업 폴더(Start in): 스크립트 디렉터리로 지정 — `DEFAULT_CSV` 상대 경로 기준이 올바르게 잡힘
+
+### 작업 항목
+
+- [x] 현재 `pythonw.exe` 경로 확인 — `C:\Users\USER_55_DeepLearning\anaconda3\pythonw.exe`
+- [x] 기존 동명 작업 존재 여부 확인 — 없음 (clean slate)
+- [x] PowerShell `Register-ScheduledTask`로 로그온 트리거 작업 등록 (Hidden + 1분 간격 3회 재시도 + Interactive/LIMITED principal까지 한 번에 설정)
+- [x] **함정 발견 및 수정**: `pythonw.exe`에선 `sys.stdout=None`이라 `log_message`의 `sys.stdout.write()`가 AttributeError → 응답 전 연결 끊김 ("empty reply from server"). `claude_usage_server.py` 상단에 stdout/stderr 가드 추가, `None`이면 `claude_usage_server.log`로 리다이렉트
+- [x] `.gitignore`에 `claude_usage_server.log` 추가
+- [x] 작업 즉시 실행으로 동작 검증 — pythonw PID 24348, localhost:8765 + LAN IP 192.168.1.16:8765 둘 다 `200 OK` 4626 bytes, 로그 파일에 두 요청 모두 기록
+- [x] LearnedPatterns.md §5.11에 `pythonw.exe + sys.stdout=None` 함정 영구 등록
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/9
+- [ ] 커밋 + push
+
+## 2026-05-21 | CLAUDE.md §2 컨벤션 감사 — HIGH + MEDIUM 위반 수정
+
+source: 2026-05-21 컨벤션 감사 결과. 사용자 결정: HIGH(brace-less if) + MEDIUM(public API Doxygen 누락 3건) 함께 진행. LOW(beszel.c 80-col 2건)는 범위 외.
+
+CLAUDE.md §2 위반:
+- Spacing & braces: "Always brace single-statement bodies — no brace-less `if (x) do_y();`"
+- Documentation: "All public functions and types must have Doxygen blocks" with `@brief`, `@param`, `@return`
+
+### 작업 항목
+
+- [x] HIGH: `main/ui.c:82-83` — `clamp_pct()`의 brace-less `if` 두 줄에 `{ }` 추가
+- [x] MED:  `main/buttons_check.h:14` — `buttons_check_init()`에 Doxygen 블록 추가
+- [x] MED:  `main/network.h:33` — `network_get_state()`에 Doxygen 블록 추가
+- [x] MED:  `main/network.h:34` — `network_is_connected()`에 Doxygen 블록 추가
+- [ ] `idf.py build` 워닝 0 확인 (LP §5.7 레시피로 백그라운드 실행 중)
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/8
+- [ ] 커밋 + push

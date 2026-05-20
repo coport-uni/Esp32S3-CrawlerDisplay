@@ -12,3 +12,6 @@ sdkconfig.old
 # Local Claude tooling artifacts (hooks/settings stay tracked, scratch files do not)
 .claude/issue-body.md
 .claude/last-build.log
+
+# Runtime log written by claude_usage_server.py when launched via pythonw.exe
+claude_usage_server.log

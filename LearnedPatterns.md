@@ -204,6 +204,28 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
   - `Ctrl+Shift+P` → `ESP-IDF: …` — full command palette
 - **Rule**: Prefer the VS Code extension chord shortcuts over a separate `idf.py` shell for routine build/flash/monitor. Drop to a terminal only for commands the extension does not surface (e.g. `idf.py fullclean`). (from ToDo: 2026-05-11 ToDo/LP repo-local 전환 + 환경 LP 추가)
 
+### 5.10 VS Code ESP-IDF extension caches `openocd.usbAdapterSerial` in workspaceStorage SQLite — stale value blocks OpenOCD when boards swap
+
+- **Problem**: VS Code-launched OpenOCD (`Ctrl+E O` and JTAG flash) failed every time with `Info : No device matches the serial string` followed by `Error: esp_usb_jtag: could not find or open device!`. The same `openocd -f board/esp32s3-builtin.cfg` invoked from a plain PowerShell session worked fine against the currently connected ESP32-S3-BOX-3. Windows showed MI_02 bound to `WinUSB` and the device "OK", so driver binding and Zadig were not at fault. The error message reads like a generic "device not found", which throws diagnosis off the actual cause.
+- **Cause**: The ESP-IDF VS Code extension (`espressif.esp-idf-extension` v2.1.0) persists the last-seen board's USB iSerial in the workspace SQLite memento — `%APPDATA%\Code\User\workspaceStorage\<workspaceHash>\state.vscdb`, table `ItemTable`, key `espressif.esp-idf-extension`, JSON field `openocd.usbAdapterSerial`. The cached value (`90:E5:B1:D6:50:D4`) belonged to a different BOX-3 previously plugged into this workspace. When a different board is connected (`90:E5:B1:D6:5A:48`), the extension still passes the old serial as `adapter serial …` to OpenOCD; the "No device matches the serial string" message is then literally accurate. The setting is not exposed in `settings.json` or the Settings UI, so `Select-String` / config inspection cannot find it.
+- **Fix**: Close VS Code, back up `state.vscdb`, then patch the JSON value to drop the cached key. The ESP32-S3 USB-JTAG iSerial is the chip MAC, so each board is distinct — locate the workspaceHash by matching the `workspace.json`'s `folder` URI.
+   ```powershell
+   Get-Process -Name "Code" -ErrorAction SilentlyContinue | Stop-Process
+   $db = "$env:APPDATA\Code\User\workspaceStorage\<workspaceHash>\state.vscdb"
+   Copy-Item $db "$db.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
+   python -c @"
+   import sqlite3, json
+   c = sqlite3.connect(r'$db').cursor()
+   v = c.execute(\"SELECT value FROM ItemTable WHERE key='espressif.esp-idf-extension'\").fetchone()[0]
+   if isinstance(v, bytes): v = v.decode('utf-8')
+   j = json.loads(v); j.pop('openocd.usbAdapterSerial', None)
+   c.execute(\"UPDATE ItemTable SET value=? WHERE key='espressif.esp-idf-extension'\", (json.dumps(j),))
+   c.connection.commit()
+   "@
+   ```
+   After removal, the extension launches OpenOCD without a serial filter on next use and auto-detects the connected board. Future board swaps do not regress as long as the user has not re-triggered the extension's serial-pick UI.
+- **Rule**: If `openocd` works from a plain shell but fails from the ESP-IDF VS Code extension with `No device matches the serial string`, suspect the workspaceStorage memento — the JTAG serial filter lives in `state.vscdb`, not `settings.json`. After replacing a physical board (or switching between multiple boards on the same workspace), clear `openocd.usbAdapterSerial` via the SQLite patch above. Treat the OpenOCD message as "extension's cached filter mismatched the present board's iSerial", not as a generic enumeration failure. (from ToDo: 2026-05-20 VSCode ESP-IDF 확장의 stale OpenOCD 시리얼 캐시 정리)
+
 ### 5.9 Windows Firewall silently blocks LAN connections to Python `http.server` from ESP
 
 - **Problem**: ESP HTTP polling failed with `server unreachable` even though `curl http://<PC-IP>:<port>/...` from the same network returned the file fine. The Python `http.server` process was alive and listening on `0.0.0.0`.
@@ -215,6 +237,20 @@ Created: 2026-05-11 (bootstrap from BOX-3 firmware work)
    ```
    Or accept the Windows Firewall popup if it appears when Python first binds the port. Verify from a **second** machine: `curl http://<PC-IP>:8765/ClaudeUsage.csv` must work — not from the host running the server.
 - **Rule**: When testing PC-side HTTP services for ESP consumption, never trust `curl` from the same PC running the server — it tests the loopback path only. Always test from a separate host (or the ESP itself) before debugging the ESP HTTP client. If "server works locally but ESP fails", suspect the firewall first. (from ToDo: 2026-05-12 Claude 사용량 탭 추가)
+
+### 5.11 `pythonw.exe` sets `sys.stdout`/`sys.stderr` to `None` — any `stdout.write()` crashes mid-request
+
+- **Problem**: `claude_usage_server.py` registered as a Task Scheduler job via `pythonw.exe` accepted TCP connections on port 8765 but every HTTP request closed before sending headers (`curl: (52) Empty reply from server`). The exact same script under `python.exe` returned the CSV correctly.
+- **Cause**: `pythonw.exe` runs detached from a console, so `sys.stdout` and `sys.stderr` are both `None`. `BaseHTTPRequestHandler.send_response()` internally calls `log_request()` → `log_message()`. The script's `log_message` override wrote to `sys.stdout.write(...)`, which raised `AttributeError: 'NoneType' object has no attribute 'write'`. The exception propagated up, the request thread died, and the kernel-buffered response was discarded before any bytes hit the wire.
+- **Fix**: At the top of any Python script that may be launched via `pythonw.exe` (Task Scheduler, Startup folder, NSSM service), guard against `None` streams and redirect to a log file before any handler runs:
+   ```python
+   if sys.stdout is None or sys.stderr is None:
+       _fp = open(LOG_PATH, "a", buffering=1, encoding="utf-8")
+       sys.stdout = _fp
+       sys.stderr = _fp
+   ```
+   This also gives you a real log to diagnose future failures of a "silent" pythonw-launched service.
+- **Rule**: Any script invoked by `pythonw.exe` must either avoid `print` / `sys.stdout.write` entirely or redirect `sys.stdout`/`sys.stderr` to a file at startup. Test the script under `pythonw.exe` from a second host before declaring it deployable — a foreground `python.exe` smoke test does not exercise the failure mode. (from ToDo: 2026-05-21 claude_usage_server.py 부팅 시 자동 실행)
 
 ---
 

@@ -19,6 +19,16 @@ from pathlib import Path
 
 DEFAULT_CSV = Path(__file__).resolve().parents[2] / "ClaudeUsage.csv"
 DEFAULT_PORT = 8765
+DEFAULT_LOG = Path(__file__).resolve().parent / "claude_usage_server.log"
+
+# Under pythonw.exe (e.g. Windows Task Scheduler with no console),
+# sys.stdout/stderr are None. Any write() then raises AttributeError
+# mid-request and the client sees "empty reply from server". Redirect
+# both streams to a log file before any handler tries to log.
+if sys.stdout is None or sys.stderr is None:
+    _log_fp = open(DEFAULT_LOG, "a", buffering=1, encoding="utf-8")
+    sys.stdout = _log_fp
+    sys.stderr = _log_fp
 
 
 class CsvHandler(http.server.BaseHTTPRequestHandler):
