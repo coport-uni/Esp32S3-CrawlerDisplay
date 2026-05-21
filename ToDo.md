@@ -368,13 +368,13 @@ Espress_dev/
 - [x] `examples/sensor_example/`에서 `idf.py build` 워닝 0 통과 — bin 0xa88a0 (55% free)
 - [x] `examples/server_monitor/`에서 `idf.py build` 워닝 0 통과 — bin 0x8f970 (62% free)
 - [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/11
-- [ ] 커밋 + push
+- [x] 커밋 + push: `031b442 refactor(examples): convert to standalone ESP-IDF projects` (Closes #11)
 
 ### 검증
 
-- 각 example 폴더에서 `idf.py build` 단독 통과
-- 루트 `idf.py build`는 여전히 메인 펌웨어(Beszel + Claude usage)를 빌드 — 회귀 없음
-- `git log --follow examples/sensor_example/main/main.c` 히스토리 끊김 없음 확인 (git mv 효과)
+- 각 example 폴더에서 `idf.py build` 단독 통과 ✅
+- 루트 `idf.py build`는 여전히 메인 펌웨어(Beszel + Claude usage)를 빌드 — 회귀 없음 (재빌드 불필요, 루트 main/은 변경 없음)
+- `git log --follow examples/sensor_example/main/main.c` 히스토리 끊김 없음 — rename 100% 매치로 인식됨 (`renamed:  examples/sensor_example/{ => main}/main.c (100%)`)
 
 ### 위험/주의
 
