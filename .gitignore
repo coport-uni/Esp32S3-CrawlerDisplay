@@ -6,12 +6,18 @@ build/
 sdkconfig
 sdkconfig.old
 
+# examples/ ESP Component Manager output — regenerated from dependencies.lock.
+# Root managed_components/ stays tracked for historical reasons; examples follow
+# the ESP-IDF standard (track lock, ignore the resolved tree).
+examples/*/managed_components/
+
 # External tools / binaries kept in workspace
 *.exe
 
 # Local Claude tooling artifacts (hooks/settings stay tracked, scratch files do not)
 .claude/issue-body.md
 .claude/last-build.log
+.claude/*-build.log
 
 # Runtime log written by claude_usage_server.py when launched via pythonw.exe
 claude_usage_server.log

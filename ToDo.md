@@ -306,7 +306,7 @@ CLAUDE.md §2 위반:
 - [x] MED:  `main/network.h:34` — `network_is_connected()`에 Doxygen 블록 추가
 - [x] `idf.py build` 워닝 0 확인 — bin 0x13bbf0 bytes, 16% 여유. 사전 Kconfig 워닝(LV_MEM_CUSTOM/LV_MEMCPY_MEMSET_STD) 2건은 이번 편집과 무관
 - [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/8
-- [ ] 커밋 + push
+- [x] 커밋 + push — `cadc208 style(main): brace single-statement bodies and add Doxygen to public API` (Closes #8)
 
 ## 2026-05-21 | examples/ 폴더 ESP-IDF 공식 스타일(#1)로 재구성 (standalone 프로젝트화)
 
@@ -356,17 +356,18 @@ Espress_dev/
 
 ### 작업 항목
 
-- [ ] `git mv examples/server_monitor_examples examples/server_monitor` (히스토리 보존)
-- [ ] 각 example에서 `main.c`/`*.c`/`*.h`/`CMakeLists.txt`/`idf_component.yml`/`Kconfig.projbuild`를 폴더 안 `main/` 서브디렉토리로 `git mv`
-- [ ] `examples/sensor_example/CMakeLists.txt` 신규 — `cmake_minimum_required(VERSION 3.16)` + `include($ENV{IDF_PATH}/tools/cmake/project.cmake)` + `project(sensor_example)`
-- [ ] `examples/server_monitor/CMakeLists.txt` 신규 — 동일 패턴으로 `project(server_monitor)`
-- [ ] `examples/sensor_example/sdkconfig.defaults` — 루트 `sdkconfig.defaults` 복사 (BOX-3 동일 하드웨어)
-- [ ] `examples/server_monitor/sdkconfig.defaults` — 루트 복사 + `Kconfig.projbuild`의 BESZEL_* 키 호환 확인
-- [ ] `examples/README.md` 신규 — 두 example 목적/빌드 명령/관계 1쪽 요약
-- [ ] 루트 `README.md`의 `examples/` 언급 부분에서 `server_monitor_examples/` → `server_monitor/`로 갱신
-- [ ] `examples/sensor_example/`에서 `idf.py set-target esp32s3 && idf.py build` 워닝 0 통과 확인 (LP §5.7 레시피)
-- [ ] `examples/server_monitor/`에서 `idf.py set-target esp32s3 && idf.py build` 워닝 0 통과 확인
-- [ ] GitHub Issue 생성 (`gh issue create`)
+- [x] `git mv examples/server_monitor_examples examples/server_monitor` (12개 파일 rename, 히스토리 보존)
+- [x] 각 example에서 `main.c`/`*.c`/`*.h`/`CMakeLists.txt`/`idf_component.yml`/`Kconfig.projbuild`를 폴더 안 `main/` 서브디렉토리로 `git mv` (sensor 13개, server_monitor 12개)
+- [x] `examples/sensor_example/CMakeLists.txt` 신규 — `project(sensor_example)`
+- [x] `examples/server_monitor/CMakeLists.txt` 신규 — `project(server_monitor)`
+- [x] `examples/sensor_example/sdkconfig.defaults` — 루트 sdkconfig.defaults 복사
+- [x] `examples/server_monitor/sdkconfig.defaults` — 루트 sdkconfig.defaults 복사 (Kconfig.projbuild BESZEL_* 호환)
+- [x] `examples/README.md` 신규 — 두 example 목적/빌드 명령/관계
+- [x] 루트 `README.md` 갱신 — `examples/sensor_example/` 경로 및 `examples/server_monitor/` 추가, "frozen reference" 설명을 standalone project로 보강
+- [x] `.gitignore`에 `examples/*/managed_components/` + `.claude/*-build.log` 추가 (사용자 결정: dependencies.lock만 트래킹, ESP-IDF 표준)
+- [x] `examples/sensor_example/`에서 `idf.py build` 워닝 0 통과 — bin 0xa88a0 (55% free)
+- [x] `examples/server_monitor/`에서 `idf.py build` 워닝 0 통과 — bin 0x8f970 (62% free)
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/11
 - [ ] 커밋 + push
 
 ### 검증

@@ -59,7 +59,7 @@ The `Claude` tab uses a different layout (no UP/DOWN, no uptime):
 - A reachable **Beszel** server on the same WiFi network (HTTP / HTTPS both work; the project defaults to plain HTTP)
 - For the Claude tab: a host PC on the same LAN that runs [`claude_usage_server.py`](claude_usage_server.py) and owns a `ClaudeUsage.csv` somewhere in the workspace. Optional — the Claude tab simply shows `server unreachable` if no server is running.
 
-The previous board self-test firmware (which also exercised the BOX-3-SENSOR extension's IMU, AHT30, AT581X radar, IR, and audio peripherals) is preserved as a frozen reference under [`sensor_example/`](sensor_example/) — see [Prior firmware: sensor_example/](#prior-firmware-sensor_example) below.
+The previous board self-test firmware (which also exercised the BOX-3-SENSOR extension's IMU, AHT30, AT581X radar, IR, and audio peripherals) is preserved as a frozen reference under [`examples/sensor_example/`](examples/sensor_example/) — see [Prior firmware: examples/sensor_example/](#prior-firmware-examplessensor_example) below.
 
 ---
 
@@ -213,7 +213,9 @@ Espress_dev/
 │   ├── CMakeLists.txt      # SRCS + REQUIRES (esp_wifi, esp_http_client, …)
 │   └── idf_component.yml   # Managed components (esp-box-3 BSP, espressif/cjson)
 ├── claude_usage_server.py  # host-side HTTP server that exposes ClaudeUsage.csv
-├── sensor_example/         # frozen snapshot of the prior BOX-3 self-test (read-only)
+├── examples/               # standalone reference projects (sensor self-test, Beszel-only)
+│   ├── sensor_example/     # frozen snapshot of the prior BOX-3 self-test (standalone idf project)
+│   └── server_monitor/     # frozen snapshot of the Beszel-only build before the Claude tab
 ├── sdkconfig.defaults      # hardware Kconfig (16 MB flash, octal PSRAM, LVGL float, …)
 ├── managed_components/     # auto-pulled libraries — DO NOT EDIT BY HAND
 ├── CLAUDE.md               # coding rules + initialization order documentation
@@ -228,9 +230,9 @@ Tab cycling is owned by [`ui.c`](main/ui.c): `ui_select_prev_tab` / `ui_select_n
 
 ---
 
-## Prior firmware: `sensor_example/`
+## Prior firmware: `examples/sensor_example/`
 
-`sensor_example/` holds a **frozen copy of the previous firmware** that the BOX-3 ran before this project pivoted to monitoring Beszel. It boots a six-tab LVGL dashboard that exercises every peripheral on the ESP32-S3-BOX-3 + BOX-3-SENSOR extension board:
+[`examples/sensor_example/`](examples/sensor_example/) holds a **frozen copy of the previous firmware** that the BOX-3 ran before this project pivoted to monitoring Beszel. It boots a six-tab LVGL dashboard that exercises every peripheral on the ESP32-S3-BOX-3 + BOX-3-SENSOR extension board:
 
 | Tab | What it shows |
 |-----|---------------|
@@ -241,9 +243,17 @@ Tab cycling is owned by [`ui.c`](main/ui.c): `ui_select_prev_tab` / `ui_select_n
 | **IR** | RX pulse count + "Send Test" NEC frame over the IR diodes |
 | **Btn** | Short / long press counters for CONFIG, MUTE, MAIN buttons |
 
-It existed to **verify each peripheral worked** before any application code was written. Now that those peripherals are confirmed and the project's purpose has narrowed to the Beszel + Claude dashboard, the self-test source lives in `sensor_example/` as documentation: copy it back into `main/` and rebuild if you ever need to re-validate the board or port an individual sensor driver into a new project.
+It existed to **verify each peripheral worked** before any application code was written. Now that those peripherals are confirmed and the project's purpose has narrowed to the Beszel + Claude dashboard, the self-test source lives here as documentation and re-validation tool.
 
-The folder is **not compiled by the top-level `CMakeLists.txt`** — it is reference material only. To rebuild and flash the old self-test, temporarily point `main/`'s CMake at `sensor_example/` (or copy its files into `main/`) and run the standard build/flash flow.
+Unlike the old layout, `examples/sensor_example/` is a **standalone ESP-IDF project** — it has its own top-level `CMakeLists.txt`, `sdkconfig.defaults`, and `main/` subdirectory. Build it directly:
+
+```powershell
+cd examples/sensor_example
+idf.py set-target esp32s3
+idf.py -p COM<N> flash monitor
+```
+
+`examples/server_monitor/` is similarly an older snapshot — the **Beszel-only build before the `Claude` tab was added**. See [`examples/README.md`](examples/README.md) for the full inventory and rationale.
 
 ---
 
@@ -276,4 +286,4 @@ These cost real time and are documented in detail with file/line references in [
 
 ## License
 
-See per-component licenses under `managed_components/`. Application source under `main/` and `sensor_example/` is unencumbered — use as a reference for your own BOX-3 projects.
+See per-component licenses under `managed_components/`. Application source under `main/` and `examples/` is unencumbered — use as a reference for your own BOX-3 projects.
