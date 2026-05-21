@@ -381,3 +381,36 @@ Espress_dev/
 - `.claude/hooks/post-write-build-check.ps1`은 `main/**`만 모니터링 — examples/는 자동 빌드 안 됨. 수동 빌드로 검증.
 - `idf.py reconfigure` 캐시: 폴더 이동 후 각 example의 `build/`가 없을 테니 그냥 새로 빌드 → 충돌 없음.
 - root `main/`의 `buttons_check.*` / `ui.*` / `network.*` / `beszel.*` / `claude_usage.*`는 server_monitor example의 후속 버전 — examples/server_monitor/는 **스냅샷**으로 남기고 후속 작업은 root에서만 진행.
+
+## 2026-05-21 | examples/sy01b_firmware standalone 화 + build & flash (COM6)
+
+목적: 사용자 요청 — `examples/sy01b_firmware` (Syringe Pump Client) build & flash. 현재 폴더는 `CMakeLists.txt`(component-level `idf_component_register`)와 `main/` 서브디렉토리만 있어 standalone 빌드 불가. 2026-05-21 이전 작업(`031b442 refactor(examples): convert to standalone ESP-IDF projects`)의 패턴(examples/server_monitor/와 동일)으로 정리한 뒤 COM6으로 flash.
+
+사용자 결정 (AskUserQuestion):
+- 구조: standalone 프로젝트로 정리 (server_monitor와 동일 패턴)
+- COM 포트: COM6
+
+### 변경 후 구조
+
+```
+examples/sy01b_firmware/
+├── CMakeLists.txt              # 신규: project(sy01b_firmware)
+├── sdkconfig.defaults          # 신규: 루트 sdkconfig.defaults 복사
+└── main/
+    ├── CMakeLists.txt          # 신규(=현재 루트 CMakeLists.txt 내용 이동)
+    ├── Kconfig.projbuild       # 기존
+    ├── idf_component.yml       # 기존
+    ├── main.c / config_store.* / pump_client.* / state.* / ui.* / wifi.*  # 기존
+```
+
+### 작업 항목
+
+- [x] `examples/sy01b_firmware/main/CMakeLists.txt` 신규 — 루트 CMakeLists.txt의 `idf_component_register(...)` 내용 이동
+- [x] `examples/sy01b_firmware/CMakeLists.txt` 교체 — `project(sy01b_client)` (사용자가 project name을 `sy01b_client`로 후속 조정)
+- [x] `examples/sy01b_firmware/sdkconfig.defaults` — 사용자가 직접 sy01b 전용으로 작성(custom partitions.csv, FreeRTOS_HZ=1000, ESP_TLS_INSECURE, WiFi 튜닝, LVGL buf PSRAM). `sdkconfig.defaults.esp32s3`로 PSRAM oct 80M / flash QIO 80M 16MB / CPU 240MHz 분리. README.md / partitions.csv 추가
+- [x] **의존성 호환 픽스**: `main/idf_component.yml`의 `espressif/esp-box-3: "^4.0"` → `"^3.0.1"`로 다운그레이드 (components.espressif.com 최신 버전이 3.2.0, v4.x 미공개) + `espressif/cjson: "^1.7.18"` 추가
+- [x] **IDF v6.0 빌드 픽스**: `main/CMakeLists.txt`의 `REQUIRES json` 제거 (IDF v6.0에서 `json` 컴포넌트 삭제 → `espressif/cjson` managed component로 대체, 자동 include) — see LP §3.7 동일 패턴
+- [x] `idf.py build` 워닝 0 통과 — `sy01b_client.bin` 0x130fb0 bytes, 60% 여유 (`.claude/last-sy01b-build.log`)
+- [x] `idf.py -p COM6 flash` 성공 — Hash verified, hard reset OK (`.claude/last-sy01b-flash.log`)
+- [x] GitHub Issue 생성: https://github.com/coport-uni/ESP32S3WebMonitor/issues/12
+- [ ] 커밋 + push
